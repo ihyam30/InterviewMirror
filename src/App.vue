@@ -1,5 +1,7 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { currentUser as fetchCurrentUser, createResource, deleteFile, deleteResource, downloadFile, listResources, login as apiLogin, logout as apiLogout, updateResource, uploadFile } from './api.js'
+import { cancelPendingReview as cancelPendingReviewFlow } from './pending-review.js'
 
 const navItems = [
   { id: 'home', label: '工作台', icon: 'home' },
@@ -7,16 +9,6 @@ const navItems = [
   { id: 'reports', label: '历史报告', icon: 'report' },
   { id: 'banks', label: '自定义题库', icon: 'bank' },
   { id: 'resumes', label: '我的简历', icon: 'resume' },
-]
-
-const seedResumes = [
-  { id: 'resume-1', name: '林同学_实习简历.pdf', updated: '今天 10:24', ready: true, default: true, size: '1.8 MB', projects: 3 },
-  { id: 'resume-2', name: '全栈方向_简历.docx', updated: '9月26日', ready: true, default: false, size: '286 KB', projects: 2 },
-]
-
-const seedBanks = [
-  { id: 'bank-1', name: 'AI 应用工程师高频题', updated: '今天 09:12', ready: true, questions: 32, format: 'PDF', questionItems: ['请介绍一下你负责过的 RAG 项目。', '你会如何设计一套大模型应用评估方案？', '模型回答不稳定时，你会怎么排查和优化？'] },
-  { id: 'bank-2', name: 'AI 全栈项目复盘题库', updated: '9月25日', ready: true, questions: 18, format: 'Markdown', questionItems: ['请介绍一个你从前端到后端完整参与的项目。', 'Vue 页面如何展示长时间运行的 AI 生成过程？', '你会如何设计 Java 服务调用模型 API 的异常处理？'] },
 ]
 
 const seedReports = [
@@ -71,18 +63,9 @@ const seedReports = [
   },
 ]
 
-function loadCollection(key, fallback) {
-  try {
-    const saved = localStorage.getItem(`interviewmirror-${key}`)
-    return saved ? JSON.parse(saved) : fallback
-  } catch {
-    return fallback
-  }
-}
-
-const resumes = ref(loadCollection('resumes', seedResumes))
-const banks = ref(loadCollection('banks', seedBanks))
-const reports = ref(loadCollection('reports', seedReports))
+const resumes = ref([])
+const banks = ref([])
+const reports = ref([...seedReports])
 const page = ref('home')
 const selectedNav = computed(() => (['reportDetail', 'gapDetail'].includes(page.value) ? 'reports' : page.value))
 const selectedReportId = ref(reports.value[0]?.id ?? null)
@@ -107,6 +90,11 @@ const resumeInput = ref(null)
 const bankInput = ref(null)
 const startedAt = ref(null)
 let toastTimer
+const authReady = ref(false)
+const currentUserInfo = ref(null)
+const loginForm = ref({ identifier: 'demo1', password: '' })
+const loginBusy = ref(false)
+const loginError = ref('')
 
 const interviewScript = [
   {
@@ -128,9 +116,61 @@ const interviewScript = [
 ]
 const activeScript = ref(interviewScript)
 
-watch(resumes, (value) => localStorage.setItem('interviewmirror-resumes', JSON.stringify(value)), { deep: true })
-watch(banks, (value) => localStorage.setItem('interviewmirror-banks', JSON.stringify(value)), { deep: true })
-watch(reports, (value) => localStorage.setItem('interviewmirror-reports', JSON.stringify(value)), { deep: true })
+function remoteItem(resource) {
+  let detail = {}
+  try { detail = JSON.parse(resource.content || '{}') } catch { detail = {} }
+  return { ...detail, id: resource.id, resourceId: resource.id, fileId: resource.fileId, name: resource.title, updated: '本地保存', ready: true }
+}
+
+async function loadOwnedResources() {
+  const [resumeRows, bankRows] = await Promise.all([listResources('RESUME'), listResources('QUESTION_BANK')])
+  resumes.value = resumeRows.map(remoteItem).map((item, index) => ({ ...item, default: item.default ?? index === 0 }))
+  banks.value = bankRows.map(remoteItem)
+  selectedResumeId.value = resumes.value.find((item) => item.default)?.id ?? resumes.value[0]?.id ?? ''
+  selectedBankId.value = banks.value[0]?.id ?? ''
+}
+
+onMounted(async () => {
+  try {
+    currentUserInfo.value = await fetchCurrentUser()
+    await loadOwnedResources()
+  } catch (error) {
+    if (error.status !== 401) loginError.value = error.message
+  } finally {
+    authReady.value = true
+  }
+})
+
+async function submitLogin() {
+  loginBusy.value = true
+  loginError.value = ''
+  try {
+    currentUserInfo.value = await apiLogin(loginForm.value.identifier.trim(), loginForm.value.password)
+    loginForm.value.password = ''
+    await loadOwnedResources()
+  } catch (error) {
+    loginError.value = error.message
+  } finally {
+    loginBusy.value = false
+  }
+}
+
+async function signOut() {
+  try { await apiLogout() } catch { /* clear local view even if the server is unreachable */ }
+  currentUserInfo.value = null
+  resumes.value = []
+  banks.value = []
+}
+
+function handleExpiredSession() {
+  currentUserInfo.value = null
+  resumes.value = []
+  banks.value = []
+  loginError.value = '登录状态已失效，请重新登录。'
+}
+
+window.addEventListener('interviewmirror-auth-expired', handleExpiredSession)
+onUnmounted(() => window.removeEventListener('interviewmirror-auth-expired', handleExpiredSession))
 
 const pageHeading = computed(() => ({
   home: ['工作台', '为下一场面试，先练一次。'],
@@ -287,38 +327,39 @@ function openResumePicker() {
   resumeInput.value?.click()
 }
 
-function onResumeSelected(event) {
+async function onResumeSelected(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
   if (!file) return
   if (file.size > 20 * 1024 * 1024) return showToast('文件不能超过 20MB')
-  pendingReview.value = {
-    type: 'resume', name: file.name, size: formatSize(file.size),
-    education: '本科 · 计算机科学与技术', skills: 'Java、Spring Boot、Vue 3、RAG、LangGraph',
-    project: '企业知识库问答系统：负责检索链路、模型接入与评测',
-  }
-  reviewDialog.value = true
+  try {
+    const stored = await uploadFile(file)
+    pendingReview.value = {
+      type: 'resume', name: stored.originalFilename, size: formatSize(stored.sizeBytes), fileId: stored.id,
+      education: '', skills: '', project: '',
+    }
+    reviewDialog.value = true
+  } catch (error) { showToast(error.message) }
 }
 
 function openBankPicker() {
   bankInput.value?.click()
 }
 
-function onBankSelected(event) {
+async function onBankSelected(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
   if (!file) return
   if (file.size > 20 * 1024 * 1024) return showToast('文件不能超过 20MB')
-  const extension = file.name.split('.').pop()?.toUpperCase() || '文档'
-  pendingReview.value = {
-    type: 'bank', name: file.name.replace(/\.[^.]+$/, ''), fileName: file.name,
-    size: formatSize(file.size), questions: [
-      '请介绍一下你对 RAG 检索链路的理解。',
-      '你会如何设计一个 AI 应用的离线评测集？',
-      '模型 API 超时或返回异常时，你会如何处理？',
-    ], format: extension,
-  }
-  reviewDialog.value = true
+  try {
+    const stored = await uploadFile(file)
+    const extension = file.name.split('.').pop()?.toUpperCase() || '文档'
+    pendingReview.value = {
+      type: 'bank', name: file.name.replace(/\.[^.]+$/, ''), fileName: file.name, fileId: stored.id,
+      size: formatSize(stored.sizeBytes), questions: [], format: extension,
+    }
+    reviewDialog.value = true
+  } catch (error) { showToast(error.message) }
 }
 
 function createBlankBank() {
@@ -341,46 +382,101 @@ function confirmReview() {
   if (!pendingReview.value) return
   if (pendingReview.value.type === 'resume') {
     const item = {
-      id: `resume-${Date.now()}`, name: pendingReview.value.name, updated: '刚刚', ready: true,
+      id: '', name: pendingReview.value.name, updated: '刚刚', ready: true,
       default: resumes.value.length === 0, size: pendingReview.value.size, projects: 1,
       education: pendingReview.value.education, skills: pendingReview.value.skills, project: pendingReview.value.project,
+      fileId: pendingReview.value.fileId,
     }
-    resumes.value.unshift(item)
-    selectedResumeId.value = item.id
-    page.value = 'resumes'
-    showToast('简历信息已确认并保存到本地演示数据')
+    saveReviewedResource('RESUME', item, () => {
+      resumes.value.unshift(item)
+      selectedResumeId.value = item.id
+      page.value = 'resumes'
+      showToast('简历确认信息已保存到本地后端')
+    })
   } else {
     const questions = pendingReview.value.questions.map((item) => item.trim()).filter(Boolean)
     if (!questions.length) return showToast('题库至少需要保留一道问题')
     const item = {
-      id: `bank-${Date.now()}`, name: pendingReview.value.name || '未命名题库', updated: '刚刚',
+      id: '', name: pendingReview.value.name || '未命名题库', updated: '刚刚',
       ready: true, questions: questions.length, format: pendingReview.value.format,
-      questionItems: questions,
+      questionItems: questions, fileId: pendingReview.value.fileId ?? null,
     }
-    banks.value.unshift(item)
-    selectedBankId.value = item.id
-    page.value = 'banks'
-    showToast(`已确认 ${questions.length} 道题目`)
+    saveReviewedResource('QUESTION_BANK', item, () => {
+      banks.value.unshift(item)
+      selectedBankId.value = item.id
+      page.value = 'banks'
+      showToast(`已确认 ${questions.length} 道题目并保存到本地后端`)
+    })
   }
-  pendingReview.value = null
-  reviewDialog.value = false
 }
 
-function deleteResume(resume) {
-  resumes.value = resumes.value.filter((item) => item.id !== resume.id)
-  if (selectedResumeId.value === resume.id) selectedResumeId.value = resumes.value[0]?.id ?? ''
-  showToast('简历已从本地演示数据中删除')
+async function saveReviewedResource(resourceType, item, afterSave) {
+  try {
+    const saved = await createResource({ resourceType, title: item.name, content: JSON.stringify(item), fileId: item.fileId ?? null })
+    item.id = saved.id
+    item.resourceId = saved.id
+    pendingReview.value = null
+    reviewDialog.value = false
+    afterSave()
+  } catch (error) { showToast(error.message) }
 }
 
-function setDefaultResume(resume) {
-  resumes.value = resumes.value.map((item) => ({ ...item, default: item.id === resume.id }))
-  showToast('已设为默认简历')
+async function cancelReview() {
+  try {
+    await cancelPendingReviewFlow(pendingReview.value, deleteFile, () => {
+      pendingReview.value = null
+      reviewDialog.value = false
+    })
+  } catch (error) {
+    const reason = error instanceof Error && error.message ? `（${error.message}）` : ''
+    showToast(`原文件删除失败，请重试取消${reason}`)
+  }
 }
 
-function deleteBank(bank) {
-  banks.value = banks.value.filter((item) => item.id !== bank.id)
-  if (selectedBankId.value === bank.id) selectedBankId.value = banks.value[0]?.id ?? ''
-  showToast('题库已删除')
+async function removeOwnedResource(collection, resource) {
+  try {
+    await deleteResource(resource.resourceId || resource.id)
+    if (resource.fileId) await deleteFile(resource.fileId)
+    collection.value = collection.value.filter((item) => item.id !== resource.id)
+    if (selectedResumeId.value === resource.id) selectedResumeId.value = resumes.value[0]?.id ?? ''
+    if (selectedBankId.value === resource.id) selectedBankId.value = banks.value[0]?.id ?? ''
+    showToast('资料和关联文件已删除')
+  } catch (error) { showToast(error.message) }
+}
+
+async function deleteResume(resume) { await removeOwnedResource(resumes, resume) }
+
+async function setDefaultResume(resume) {
+  const updated = []
+  try {
+    for (const item of resumes.value) {
+      const next = { ...item, default: item.id === resume.id }
+      await updateResource(item.resourceId || item.id, {
+        title: item.name,
+        content: JSON.stringify(next),
+        fileId: item.fileId ?? null,
+      })
+      updated.push(next)
+    }
+    resumes.value = updated
+    showToast('已设为默认简历')
+  } catch (error) { showToast(error.message) }
+}
+
+async function deleteBank(bank) {
+  await removeOwnedResource(banks, bank)
+}
+
+async function downloadOwnedFile(fileId, filename) {
+  try {
+    const blob = await downloadFile(fileId)
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = filename || 'interviewmirror-upload'
+    anchor.click()
+    URL.revokeObjectURL(url)
+  } catch (error) { showToast(error.message) }
 }
 
 function useBankForPractice(bank) {
@@ -396,23 +492,36 @@ function formatSize(bytes) {
 }
 
 function resetDemo() {
-  if (!window.confirm('重置会清除本机保存的演示资料和新增报告，恢复初始样例。继续吗？')) return
-  resumes.value = [...seedResumes]
-  banks.value = [...seedBanks]
+  if (!window.confirm('重置只会恢复当前页面里的只读示例报告，不会删除账号资料。继续吗？')) return
+  resumes.value = [...resumes.value]
+  banks.value = [...banks.value]
   reports.value = [...seedReports]
-  selectedResumeId.value = seedResumes[0].id
-  selectedBankId.value = seedBanks[0].id
-  selectedReportId.value = seedReports[0].id
+  selectedResumeId.value = resumes.value[0]?.id ?? ''
+  selectedBankId.value = banks.value[0]?.id ?? ''
+  selectedReportId.value = reports.value[0]?.id ?? null
   page.value = 'home'
-  localStorage.removeItem('interviewmirror-resumes')
-  localStorage.removeItem('interviewmirror-banks')
-  localStorage.removeItem('interviewmirror-reports')
-  showToast('演示数据已重置')
+  showToast('示例报告已重置，账号资料保持不变')
 }
 </script>
 
 <template>
-  <div class="app-shell">
+  <section v-if="!authReady" class="auth-screen"><div class="auth-card"><div class="brand-mark"><span></span></div><h1>正在连接本地服务</h1><p>正在检查登录状态与私有资料空间…</p></div></section>
+  <section v-else-if="!currentUserInfo" class="auth-screen">
+    <form class="auth-card" @submit.prevent="submitLogin">
+      <div class="auth-brand"><span class="brand-mark"><span></span></span><span><strong>面镜</strong><small>InterviewMirror</small></span></div>
+      <span class="section-kicker">LOCAL PRACTICE SPACE</span>
+      <h1>登录你的练习空间</h1>
+      <p>简历、题库和文件会隔离保存在你的本地账号下。</p>
+      <label class="field-label" for="login-username">用户名或邮箱</label>
+      <input id="login-username" v-model="loginForm.identifier" class="text-field auth-input" autocomplete="username" required maxlength="160" />
+      <label class="field-label" for="login-password">密码</label>
+      <input id="login-password" v-model="loginForm.password" class="text-field auth-input" type="password" autocomplete="current-password" required maxlength="200" />
+      <p v-if="loginError" class="auth-error" role="alert">{{ loginError }}</p>
+      <button class="primary-button auth-submit" type="submit" :disabled="loginBusy">{{ loginBusy ? '正在登录…' : '登录' }} <span>→</span></button>
+      <small class="auth-hint">本地演示账号：demo1 / MirrorDemo1!　·　demo2 / MirrorDemo2!</small>
+    </form>
+  </section>
+  <div v-else class="app-shell">
     <aside class="sidebar">
       <a class="brand" href="#home" @click.prevent="navigate('home')">
         <span class="brand-mark"><span></span></span>
@@ -435,11 +544,11 @@ function resetDemo() {
       <div class="sidebar-bottom">
         <div class="local-card">
           <span class="local-pulse"></span>
-          <div><strong>本地演示模式</strong><small>资料仅保存在此浏览器</small></div>
-        </div>
-        <button class="profile-button" @click="showToast('当前为本地演示账号：林同学')">
-          <span class="avatar">林</span>
-          <span class="profile-copy"><strong>林同学</strong><small>求职者</small></span>
+        <div><strong>本地私有空间</strong><small>文件经账号校验后访问</small></div>
+      </div>
+        <button class="profile-button" @click="signOut" title="退出登录">
+          <span class="avatar">{{ currentUserInfo.displayName.slice(0, 1) }}</span>
+          <span class="profile-copy"><strong>{{ currentUserInfo.displayName }}</strong><small>{{ currentUserInfo.username }} · 退出</small></span>
           <span class="more-dots">···</span>
         </button>
       </div>
@@ -453,7 +562,7 @@ function resetDemo() {
           <button class="icon-button" title="重置演示数据" @click="resetDemo">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"/><path d="M3 3v5h5m4-1v5l3 2"/></svg>
           </button>
-          <button class="help-button" @click="showToast('这是面镜的本地交互演示')">帮助</button>
+          <button class="help-button" @click="showToast(`已登录 ${currentUserInfo.username}，私有资料通过本地 API 保存`)" >{{ currentUserInfo.username }}</button>
         </div>
       </header>
 
@@ -554,7 +663,7 @@ function resetDemo() {
                 <label class="field-label jd-label" for="jd-input">目标岗位 JD <span class="optional-tag">选填</span></label>
                 <textarea id="jd-input" v-model="jdText" class="text-field jd-field" maxlength="1500" placeholder="粘贴岗位职责与任职要求…\n\n有 JD 时，系统会在报告中加入岗位差异化分析；没有 JD 也可以开始综合练习。"></textarea>
                 <div class="field-footnote"><span>最多 1500 字</span><span>{{ jdText.length }} / 1500</span></div>
-                <div class="privacy-note"><span>◇</span><span>纯前端交互演示：不会上传原始文件，也不会调用模型 API；仅在此浏览器保存确认后的模拟字段。</span></div>
+          <div class="privacy-note"><span>◇</span><span>本阶段已接入本地私有文件存储；资料仅用于工程演示，解析字段由你在确认页填写，暂不调用解析服务或模型。</span></div>
               </template>
               <template v-else>
                 <label class="field-label">选择自定义题库 <span class="required-star">*</span></label>
@@ -609,7 +718,8 @@ function resetDemo() {
         <template v-else-if="page === 'reports'">
           <div class="page-intro"><div><span class="section-kicker">YOUR JOURNEY</span><h1>历史报告</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" @click="navigate('practice')">＋ 新建面试</button></div>
           <div class="report-summary-strip"><div><span class="summary-icon">◷</span><span><small>累计练习</small><strong>{{ reports.length }} <small>场</small></strong></span></div><div><span class="summary-icon peach-summary">✦</span><span><small>平均表现</small><strong>{{ averageScore }} <small>分</small></strong></span></div><div><span class="summary-icon green-summary">↗</span><span><small>含岗位差异分析</small><strong>{{ reports.filter((r) => r.hasJD).length }} <small>份</small></strong></span></div></div>
-          <section class="panel report-list-panel"><div class="list-panel-heading"><div><span class="section-kicker">ALL SESSIONS</span><h2>全部面试记录 <span>{{ reports.length }}</span></h2></div><div class="sort-select">最近练习 <span>⌄</span></div></div>
+          <div class="library-tip"><span>◇</span><p><strong>只读示例报告</strong> 当前报告用于展示报告和差异分析交互，不代表真实登录账号的练习历史；真实报告持久化会在后续业务阶段接入。</p></div>
+          <section class="panel report-list-panel"><div class="list-panel-heading"><div><span class="section-kicker">ALL SESSIONS</span><h2>示例面试记录 <span>{{ reports.length }}</span></h2></div><div class="sort-select">最近练习 <span>⌄</span></div></div>
             <div v-if="reports.length" class="report-table">
               <div class="table-head"><span>面试与岗位</span><span>类型</span><span>时间</span><span>岗位匹配</span><span>综合评分</span><span></span></div>
               <button v-for="report in reports" :key="report.id" class="report-row" @click="openReport(report)">
@@ -661,12 +771,12 @@ function resetDemo() {
 
         <template v-else-if="page === 'banks'">
           <div class="page-intro"><div><span class="section-kicker">YOUR QUESTION LIBRARY</span><h1>自定义题库</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" @click="openBankPicker">＋ 上传题库</button></div>
-          <div class="library-tip"><span>✦</span><p><strong>先确认解析结果，再开始练习。</strong>支持 PDF、DOCX、TXT 和 Markdown；不会上传原始文件，确认后只保存模拟题目字段。</p><button @click="createBlankBank">手动创建</button></div>
+          <div class="library-tip"><span>✦</span><p><strong>先确认题库内容，再开始练习。</strong>支持 PDF、DOCX、TXT 和 Markdown；原文件保存在当前账号的私有对象空间，题目目前需手动确认。</p><button @click="createBlankBank">手动创建</button></div>
           <div class="library-toolbar"><div class="library-tabs"><button class="active">全部题库 <span>{{ banks.length }}</span></button><button @click="showToast('当前演示仅包含本地题库')">最近使用</button></div><div class="sort-select">最近更新 <span>⌄</span></div></div>
           <div v-if="banks.length" class="bank-grid">
             <article v-for="(bank, index) in banks" :key="bank.id" class="bank-card-item">
               <div class="bank-card-art" :class="`art-${index % 3}`"><span class="bank-art-label">{{ bank.format }}</span><span class="bank-art-mark">{{ index % 2 === 0 ? 'Q.' : '问' }}</span><span class="bank-art-line"></span><span class="bank-art-line short"></span><span class="bank-art-spark">✦</span></div>
-              <div class="bank-card-content"><div class="bank-card-title"><span class="document-icon bank-document"><svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20"/></svg></span><div><strong>{{ bank.name }}</strong><small>{{ bank.questions }} 道题 · {{ bank.format }}</small></div><button class="more-button" @click="deleteBank(bank)" title="删除题库">···</button></div><div class="bank-card-footer"><span>最近更新 {{ bank.updated }}</span><span class="ready-label"><i></i>已确认</span></div><button class="bank-practice-button" @click="useBankForPractice(bank)">用此题库开始练习 <span>→</span></button></div>
+              <div class="bank-card-content"><div class="bank-card-title"><span class="document-icon bank-document"><svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20"/></svg></span><div><strong>{{ bank.name }}</strong><small>{{ bank.questions }} 道题 · {{ bank.format }}</small></div><button class="more-button" @click="deleteBank(bank)" title="删除题库">···</button></div><div class="bank-card-footer"><span>最近更新 {{ bank.updated }}</span><span class="ready-label"><i></i>已确认</span></div><button v-if="bank.fileId" class="text-button" @click="downloadOwnedFile(bank.fileId, bank.fileName || bank.name)">下载原文件</button><button class="bank-practice-button" @click="useBankForPractice(bank)">用此题库开始练习 <span>→</span></button></div>
             </article>
             <button class="add-bank-card" @click="openBankPicker"><span>＋</span><strong>添加新题库</strong><small>上传资料，整理你的练习内容</small></button>
           </div>
@@ -675,23 +785,23 @@ function resetDemo() {
 
         <template v-else-if="page === 'resumes'">
           <div class="page-intro"><div><span class="section-kicker">YOUR CAREER STORY</span><h1>我的简历</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" @click="openResumePicker">＋ 上传简历</button></div>
-          <div class="resume-private-note"><span>◇</span><p><strong>本地演示资料</strong> 不会上传或保留原始文件；当前只模拟简历解析，确认后把字段保存在本浏览器中，供交互演示使用。</p></div>
+          <div class="resume-private-note"><span>◇</span><p><strong>本地私有资料</strong> 原始文件存于私有对象桶；本阶段尚未接入 MinerU 解析，字段由你在确认页补充并存入本地数据库。</p></div>
           <div class="resume-layout"><section class="resume-list-column"><div class="library-toolbar resume-toolbar"><div class="library-tabs"><button class="active">全部简历 <span>{{ resumes.length }}</span></button></div><span class="sort-select">最近更新 <b>⌄</b></span></div>
-              <div v-if="resumes.length" class="resume-list"> <article v-for="resume in resumes" :key="resume.id" class="resume-card" :class="{ 'resume-default': resume.default }"><div class="resume-file-preview"><span class="pdf-ribbon">{{ resume.name.endsWith('.docx') ? 'DOC' : 'PDF' }}</span><div class="preview-monogram">林<br /><small>简历</small></div><i></i><i></i><i class="preview-short"></i><i></i></div><div class="resume-card-body"><div class="resume-title-row"><div><h3>{{ resume.name }}</h3><span class="resume-status"><i></i>信息已确认</span><span v-if="resume.default" class="default-tag">默认简历</span></div><button class="more-button" @click="deleteResume(resume)" title="删除简历">···</button></div><div class="resume-meta-line"><span>{{ resume.size }}</span><i>·</i><span>{{ resume.projects }} 段项目经历</span><i>·</i><span>{{ resume.updated }} 更新</span></div><div class="resume-skills"><span v-for="skill in (resume.skills || 'Java、Spring Boot、RAG').split('、').slice(0, 4)" :key="skill">{{ skill }}</span></div><div v-if="resume.project" class="resume-project"><small>项目摘要</small><p>{{ resume.project }}</p></div><div class="resume-card-actions"><button class="subtle-button" @click="showToast('演示资料字段已在上传确认时校验')">查看解析信息</button><button v-if="!resume.default" class="text-button" @click="setDefaultResume(resume)">设为默认简历</button><span v-else class="default-confirmed">✓ 默认使用</span></div></div></article></div>
+              <div v-if="resumes.length" class="resume-list"> <article v-for="resume in resumes" :key="resume.id" class="resume-card" :class="{ 'resume-default': resume.default }"><div class="resume-file-preview"><span class="pdf-ribbon">{{ resume.name.endsWith('.docx') ? 'DOC' : 'PDF' }}</span><div class="preview-monogram">镜<br /><small>简历</small></div><i></i><i></i><i class="preview-short"></i><i></i></div><div class="resume-card-body"><div class="resume-title-row"><div><h3>{{ resume.name }}</h3><span class="resume-status"><i></i>信息已确认</span><span v-if="resume.default" class="default-tag">默认简历</span></div><button class="more-button" @click="deleteResume(resume)" title="删除简历">···</button></div><div class="resume-meta-line"><span>{{ resume.size }}</span><i>·</i><span>{{ resume.projects }} 段项目经历</span><i>·</i><span>{{ resume.updated }} 更新</span></div><div class="resume-skills"><span v-for="skill in (resume.skills || 'Java、Spring Boot、RAG').split('、').slice(0, 4)" :key="skill">{{ skill }}</span></div><div v-if="resume.project" class="resume-project"><small>项目摘要</small><p>{{ resume.project }}</p></div><div class="resume-card-actions"><button class="subtle-button" @click="showToast('字段由你在确认页填写；简历解析会在后续阶段接入')">查看资料字段</button><button v-if="resume.fileId" class="text-button" @click="downloadOwnedFile(resume.fileId, resume.name)">下载原文件</button><button v-if="!resume.default" class="text-button" @click="setDefaultResume(resume)">设为默认简历</button><span v-else class="default-confirmed">✓ 默认使用</span></div></div></article></div>
               <div v-else class="empty-state"><span>▤</span><strong>上传一份简历，开始你的第一场综合面试</strong><button class="primary-button" @click="openResumePicker">上传简历</button></div>
             </section><aside class="resume-aside"><div class="panel resume-aside-card"><span class="section-kicker">A GOOD START</span><h3>让经历成为你的回答线索</h3><p>简历中的项目、技术选择和结果，会成为综合面试追问的起点。</p><div class="resume-aside-illustration"><span class="resume-paper"><i></i><i></i><i></i><b>✦</b></span><span class="resume-sun"></span></div><div class="aside-check"><span>✓</span> 上传后先检查解析结果</div><div class="aside-check"><span>✓</span> 修正错漏后再确认使用</div><div class="aside-check"><span>✓</span> 只在综合面试中关联简历</div></div></aside></div>
         </template>
       </div>
     </main>
 
-    <input ref="resumeInput" class="visually-hidden" type="file" accept=".pdf,.doc,.docx" @change="onResumeSelected" />
-    <input ref="bankInput" class="visually-hidden" type="file" accept=".pdf,.doc,.docx,.txt,.md,.markdown" @change="onBankSelected" />
+    <input ref="resumeInput" class="visually-hidden" type="file" accept=".pdf,.docx" @change="onResumeSelected" />
+    <input ref="bankInput" class="visually-hidden" type="file" accept=".pdf,.docx,.txt,.md,.markdown" @change="onBankSelected" />
 
     <div v-if="toast" class="toast-message"><span>✓</span>{{ toast }}</div>
 
-    <div v-if="reviewDialog && pendingReview" class="dialog-scrim" @click.self="reviewDialog = false">
+    <div v-if="reviewDialog && pendingReview" class="dialog-scrim" @click.self="cancelReview">
       <section class="review-dialog" role="dialog" aria-modal="true" :aria-label="pendingReview.type === 'resume' ? '确认简历解析结果' : '确认题库解析结果'">
-        <div class="dialog-top"><div><span class="section-kicker">REVIEW BEFORE USE</span><h2>{{ pendingReview.type === 'resume' ? '确认简历信息' : '确认题库问题' }}</h2><p>本地演示会展示模拟解析结果；确认后才可用于面试。</p></div><button class="dialog-close" @click="reviewDialog = false">×</button></div>
+        <div class="dialog-top"><div><span class="section-kicker">REVIEW BEFORE USE</span><h2>{{ pendingReview.type === 'resume' ? '确认简历信息' : '确认题库问题' }}</h2><p>本地演示会展示模拟解析结果；确认后才可用于面试。</p></div><button class="dialog-close" aria-label="取消并删除上传文件" @click="cancelReview">×</button></div>
         <template v-if="pendingReview.type === 'resume'">
           <label class="field-label">文件名称</label><input v-model="pendingReview.name" class="text-field" />
           <label class="field-label dialog-field-label">教育经历</label><input v-model="pendingReview.education" class="text-field" />
@@ -703,8 +813,8 @@ function resetDemo() {
           <div class="question-review-heading"><span class="field-label">解析出的题目</span><button class="text-button" @click="addQuestion">＋ 添加问题</button></div>
           <div class="question-review-list"><div v-for="(question, index) in pendingReview.questions" :key="index" class="question-edit-row"><span>{{ String(index + 1).padStart(2, '0') }}</span><textarea v-model="pendingReview.questions[index]" class="text-field"></textarea><button @click="removeQuestion(index)" title="删除问题">×</button></div></div>
         </template>
-        <div class="dialog-footnote"><span>◇</span> 当前为静态演示解析；不会上传或保存原始文件，只保存你确认后的模拟字段。</div>
-        <div class="dialog-actions"><button class="subtle-button" @click="reviewDialog = false">取消</button><button class="primary-button" @click="confirmReview">确认并保存 <span>→</span></button></div>
+        <div class="dialog-footnote"><span>◇</span> 原文件已保存到当前登录账号的私有空间；解析结果在本阶段由你手动填写，确认后才会进入本地业务记录。</div>
+        <div class="dialog-actions"><button class="subtle-button" @click="cancelReview">取消并删除上传文件</button><button class="primary-button" @click="confirmReview">确认并保存 <span>→</span></button></div>
       </section>
     </div>
   </div>

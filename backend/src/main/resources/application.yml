@@ -1,0 +1,47 @@
+server:
+  port: ${SERVER_PORT:8080}
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: strict
+        secure: ${SESSION_COOKIE_SECURE:false}
+
+spring:
+  application:
+    name: interviewmirror-backend
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/interviewmirror}
+    username: ${DATABASE_USER:interviewmirror}
+    password: ${DATABASE_PASSWORD:local-dev-only-change-me}
+    hikari:
+      maximum-pool-size: 10
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
+  jackson:
+    default-property-inclusion: non_null
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+interviewmirror:
+  storage:
+    endpoint: ${S3_ENDPOINT:http://localhost:9000}
+    access-key: ${S3_ACCESS_KEY:local-dev-access}
+    secret-key: ${S3_SECRET_KEY:local-dev-secret-change-me}
+    bucket: ${S3_BUCKET:interviewmirror-private}
+
+logging:
+  level:
+    root: INFO
+    local.interviewmirror.backend: INFO
