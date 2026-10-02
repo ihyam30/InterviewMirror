@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "datasetId": "interviewmirror-stage0-synthetic-24",
+  "sampleCount": 24,
+  "generatedBy": "scripts/poc/generate_samples.py",
+  "generator": {
+    "python": "3.12.14",
+    "platform": "win32",
+    "packages": {
+      "python-docx": "1.2.0",
+      "reportlab": "5.0.1",
+      "Pillow": "12.3.0",
+      "lxml": "6.1.3",
+      "typing-extensions": "4.16.0",
+      "charset-normalizer": "3.5.2"
+    },
+    "systemInputs": {
+      "cjkFontPath": "C:/Windows/Fonts/msyh.ttc",
+      "cjkFontSha256": "d79c55e68b1131eea0cc1c47be4f572d964f28c682e143db2ad09c1e4cb07a3f"
+    }
+  },
+  "samples": [
+    {
+      "sampleId": "R01",
+      "file": "R01.pdf",
+      "sha256": "22988e368e4cce6329037a67582f0016c3dd3eee24c15f61ea8ca5660c5fa5d8"
+    },
+    {
+      "sampleId": "R02",
+      "file": "R02.docx",
+      "sha256": "d48e8af2032108b7305a8eb8f2578b2d475b095db062b7eb0c171192eabbd3e8"
+    },
+    {
+      "sampleId": "R03",
+      "file": "R03.pdf",
+      "sha256": "ad4a83b1fd51b9d17457c7b1c7a5d0d8f5f1f0c163d56aba27e8cfa4cd0b28fa"
+    },
+    {
+      "sampleId": "R04",
+      "file": "R04.docx",
+      "sha256": "474af5bb74b222bf27efb2c5fff1d745e1973b87878d58b2209670d06192ec68"
+    },
+    {
+      "sampleId": "R05",
+      "file": "R05.pdf",
+      "sha256": "38b1f9bdf6cfe89492775f3e2218f4691312a4dfeaf22b97421dea18bbda418e"
+    },
+    {
+      "sampleId": "R06",
+      "file": "R06.docx",
+      "sha256": "43736f62d5ced8a6b413208d37a41a8c4ce10f617dc884fbdcc8953f9ae63d13"
+    },
+    {
+      "sampleId": "R07",
+      "file": "R07.pdf",
+      "sha256": "4e9f488cbc61714f44aadba51c0fa38ed0c0cfd8c1f39da4ef88d1d64b66aaab"
+    },
+    {
+      "sampleId": "R08",
+      "file": "R08.docx",
+      "sha256": "ceb6a33c1fdebea33c87f3f8c7c306ed1c2c7ddbfad9b086da0485ac199c331f"
+    },
+    {
+      "sampleId": "R09",
+      "file": "R09.pdf",
+      "sha256": "200d7dc94bd26ff9333465fb164d1d09a38fe16b19111328c7274f8e7aece05d"
+    },
+    {
+      "sampleId": "R10",
+      "file": "R10.docx",
+      "sha256": "d4e2b5a7fc1e1c72991f98dc3a9cacab4ae0e1492eae46ae5d29a821e51001c8"
+    },
+    {
+      "sampleId": "Q01",
+      "file": "Q01.md",
+      "sha256": "2f4a66184bc3f580cca1d981ee84005b9d3727855eae109cf0f47e43dd14dcd8"
+    },
+    {
+      "sampleId": "Q02",
+      "file": "Q02.txt",
+      "sha256": "74d6fa2f73a3190cb0fff038478310d947566199261b7ef2756b08d1e9f70f05"
+    },
+    {
+      "sampleId": "Q03",
+      "file": "Q03.md",
+      "sha256": "645be5ad30683506689ba0c25cadb6cc9b295e4c52eb9ad5a3f442a8f5992ded"
+    },
+    {
+      "sampleId": "Q04",
+      "file": "Q04.docx",
+      "sha256": "fc3f6177d9bcef553b0ed6e1fbc253b160d0b27fb4fbd4bf80170ff5dbc00579"
+    },
+    {
+      "sampleId": "Q05",
+      "file": "Q05.pdf",
+      "sha256": "6fc17e36ed2196b9d0081f60434a115262e6b3a45b951e42c784742aa148d96b"
+    },
+    {
+      "sampleId": "Q06",
+      "file": "Q06.txt",
+      "sha256": "8440d6a811adf959d01957c13a52d0e80269ebb89913501586691fc46a18efb5"
+    },
+    {
+      "sampleId": "Q07",
+      "file": "Q07.md",
+      "sha256": "3efb85ee291b6967369f47b9074ba7c6faafb093ba87f192b0bda5bf08788fd2"
+    },
+    {
+      "sampleId": "Q08",
+      "file": "Q08.pdf",
+      "sha256": "193a477ae47c4e52fe78878d229a3eada3bfb42c4ee8bbc0181c9372594f72e6"
+    },
+    {
+      "sampleId": "Q09",
+      "file": "Q09.md",
+      "sha256": "3c61bc1a17ced00c73c0a72e0cda5fea77428c003105b06c90c67af03b19d9da"
+    },
+    {
+      "sampleId": "Q10",
+      "file": "Q10.txt",
+      "sha256": "af7d73d13dd90cc6a090b1dc1d6bae66690f6e7d0c884f92b7f79970100ef55c"
+    },
+    {
+      "sampleId": "J01",
+      "file": "J01.docx",
+      "sha256": "ca3b86aa8592fa877ac2dbf643653ec80c8faee6275439ec37e752fbe195872e"
+    },
+    {
+      "sampleId": "J02",
+      "file": "J02.pdf",
+      "sha256": "d6168e765dc1b1bbbdec0cb68574bfdb6471c6a7fd31015158a3db825db02c1e"
+    },
+    {
+      "sampleId": "J03",
+      "file": "J03.docx",
+      "sha256": "967c7980a631a1f05644e37d9ff8ff8ea72121e310e209e626e4bea5b8ec3b74"
+    },
+    {
+      "sampleId": "J04",
+      "file": "J04.pdf",
+      "sha256": "4ce19d871bb87855f2deec86760d023231cddabe761cd525584edd7038c7607d"
+    }
+  ]
+}

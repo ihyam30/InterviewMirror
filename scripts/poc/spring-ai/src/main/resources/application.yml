@@ -1,0 +1,22 @@
+spring:
+  main:
+    web-application-type: none
+  ai:
+    model:
+      chat: openai
+    openai:
+      base-url: ${MODEL_BASE_URL}
+      api-key: ${MODEL_API_KEY}
+      chat:
+        model: ${MODEL_ID}
+        temperature: 0
+      max-retries: 0
+interviewmirror:
+  model:
+    provider: ${MODEL_PROVIDER}
+    id: ${MODEL_ID}
+    price-input-cny-per-million: ${MODEL_PRICE_INPUT_CNY:0}
+    price-output-cny-per-million: ${MODEL_PRICE_OUTPUT_CNY:0}
+    cases-path: ${MODEL_CASES_PATH:/workspace/data/poc/model-cases.v1.json}
+    output-path: ${MODEL_OUTPUT_PATH:/workspace/data/poc/results/spring-ai/model-run.json}
+    reasoning-effort: ${MODEL_REASONING_EFFORT:default}

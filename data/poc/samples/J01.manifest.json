@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "J01",
+  "file": "J01.docx",
+  "format": "docx",
+  "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "category": "jd",
+  "complexityTags": [
+    "office",
+    "table",
+    "complex"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "requirements": [
+      "Build enterprise knowledge assistants using RAG.",
+      "Create offline evaluation datasets and improve answer quality.",
+      "Handle API timeouts, retries and fallbacks."
+    ]
+  },
+  "sha256": "ca3b86aa8592fa877ac2dbf643653ec80c8faee6275439ec37e752fbe195872e"
+}

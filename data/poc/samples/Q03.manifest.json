@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "Q03",
+  "file": "Q03.md",
+  "format": "md",
+  "mediaType": "text/markdown",
+  "category": "question_bank",
+  "complexityTags": [
+    "table",
+    "formula"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "questions": [
+      "How do you calculate Recall@K?",
+      "When would you use reranking?",
+      "How do you compare two prompt versions?"
+    ]
+  },
+  "sha256": "645be5ad30683506689ba0c25cadb6cc9b295e4c52eb9ad5a3f442a8f5992ded"
+}

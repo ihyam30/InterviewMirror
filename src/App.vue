@@ -1,0 +1,711 @@
+<script setup>
+import { computed, ref, watch } from 'vue'
+
+const navItems = [
+  { id: 'home', label: '工作台', icon: 'home' },
+  { id: 'practice', label: '模拟面试', icon: 'mic' },
+  { id: 'reports', label: '历史报告', icon: 'report' },
+  { id: 'banks', label: '自定义题库', icon: 'bank' },
+  { id: 'resumes', label: '我的简历', icon: 'resume' },
+]
+
+const seedResumes = [
+  { id: 'resume-1', name: '林同学_实习简历.pdf', updated: '今天 10:24', ready: true, default: true, size: '1.8 MB', projects: 3 },
+  { id: 'resume-2', name: '全栈方向_简历.docx', updated: '9月26日', ready: true, default: false, size: '286 KB', projects: 2 },
+]
+
+const seedBanks = [
+  { id: 'bank-1', name: 'AI 应用工程师高频题', updated: '今天 09:12', ready: true, questions: 32, format: 'PDF', questionItems: ['请介绍一下你负责过的 RAG 项目。', '你会如何设计一套大模型应用评估方案？', '模型回答不稳定时，你会怎么排查和优化？'] },
+  { id: 'bank-2', name: 'AI 全栈项目复盘题库', updated: '9月25日', ready: true, questions: 18, format: 'Markdown', questionItems: ['请介绍一个你从前端到后端完整参与的项目。', 'Vue 页面如何展示长时间运行的 AI 生成过程？', '你会如何设计 Java 服务调用模型 API 的异常处理？'] },
+]
+
+const seedReports = [
+  {
+    id: 'report-0930', title: 'AI 应用工程师实习', mode: '综合面试', date: '2026年9月30日 · 14:20', duration: '28 分钟', questionCount: 7,
+    resumeId: 'resume-1', jdText: '负责企业级知识库与智能问答应用建设；持续评估并优化大模型应用效果；熟悉服务部署、监控及异常处理。',
+    overallScore: 82, overall: '基础扎实，能结合项目解释 RAG 检索链路。可以进一步补充评估指标和线上效果，让回答更有说服力。',
+    hasJD: true, matchScore: 78, coverage: '8 / 10 项已评估', oneLine: '项目经历与岗位方向较匹配，线上评估与稳定性证据仍需补强。',
+    scores: [
+      { label: '技术深度', score: 4.1, note: 'RAG 检索链路解释清楚，重排策略还可展开。' },
+      { label: '项目经验', score: 4.3, note: '能讲清个人负责内容，建议量化业务结果。' },
+      { label: '问题解决', score: 3.8, note: '排查思路完整，缺少对方案取舍的说明。' },
+      { label: '岗位匹配', score: 4.0, note: '核心技能覆盖较好，评估和监控证据不足。' },
+      { label: '表达逻辑', score: 3.7, note: '结论明确，部分回答背景铺垫偏长。' },
+    ],
+    gaps: [
+      { title: '缺少线上效果评估闭环', group: '实际表现差距', priority: '高', requirement: '建立离线评估集并跟踪线上反馈', evidence: 'JD · 任职要求第 3 条', detail: '你提到了召回率优化，但尚未说明如何构造评估集、设定指标或持续监控效果。' },
+      { title: '项目结果缺少量化指标', group: '简历证据差距', priority: '高', requirement: '用数据说明项目效果和个人贡献', evidence: '简历 · 项目经历 1', detail: '简历描述了检索链路实现，但没有展示准确率、延迟或使用效果的变化。' },
+      { title: '缺少模型服务稳定性方案', group: '实际表现差距', priority: '中', requirement: '具备超时、重试与降级处理经验', evidence: '回答 · 第 6 题', detail: '回答中提及重试，但没有说明超时边界、幂等策略和降级方案。' },
+    ],
+    turns: [
+      { question: '请介绍一下你简历中的知识库问答项目，你负责了哪些部分？', answer: '我主要负责 RAG 检索链路，从文档切分、向量化到召回和重排都做了实现。项目里我还加了一个基于规则的查询改写。', note: '项目职责说明清楚。可以补充项目规模、评估方法和最终效果。', score: 4 },
+      { question: '为什么在向量检索之后还要做重排？', answer: '向量召回更关注语义相似度，可能会把主题相关但不能回答问题的片段排前面。重排模型会结合问题和候选片段重新计算相关性。', note: '概念解释准确。建议举一个实际误召回案例。', score: 4 },
+      { question: '你如何验证一次检索策略调整确实让回答更好？', answer: '我会先准备一批问题，再看召回的文档对不对。如果有错误，我会调整切分长度和召回数量。', note: '有评估意识，但需要定义标注集、指标和迭代前后的对比方式。', score: 3 },
+    ],
+    strengths: ['RAG 核心链路理解完整', '能清楚区分个人职责与团队成果', '回答有技术细节，能说明方案选择'],
+    weaknesses: ['项目结果缺少量化证据', '评估集与线上监控方法不够具体', '部分回答的背景铺垫偏长'],
+    suggestions: ['为项目补充 20–30 条固定评估问题，记录 Recall@K 与答案引用正确率。', '梳理一次线上故障或误召回案例，用“现象—定位—取舍—结果”复盘。', '练习先用一句话给结论，再用项目事实展开。'],
+    learning: ['第 1 周：补全 RAG 离线评测集与指标', '第 2 周：实践模型服务超时、重试和降级', '第 3 周：围绕 JD 做一次完整项目复盘演练'],
+  },
+  {
+    id: 'report-0928', title: 'AI 全栈开发实习', mode: '题库专项', date: '2026年9月28日 · 19:05', duration: '21 分钟', questionCount: 6,
+    bankId: 'bank-2',
+    overallScore: 76, overall: '后端与模型接入基础不错。建议强化前后端协作、接口边界和项目交付中的工程化表达。',
+    hasJD: false, matchScore: null, coverage: null, oneLine: null,
+    scores: [
+      { label: '技术深度', score: 3.8, note: '基础概念准确，可增加设计取舍。' },
+      { label: '项目经验', score: 3.9, note: '经历相关，缺少交付结果量化。' },
+      { label: '问题解决', score: 3.6, note: '能说明排查步骤，可补充边界条件。' },
+      { label: '岗位匹配', score: null, note: '专项面试不评估岗位匹配。' },
+      { label: '表达逻辑', score: 3.7, note: '表达自然，建议减少重复信息。' },
+    ],
+    gaps: [],
+    turns: [
+      { question: '前端如何处理一个长时间运行的 AI 生成请求？', answer: '我会用 SSE 把增量结果推到页面，后端保存生成状态，页面显示当前进度。', note: '回答切中重点，可以补充断线后的恢复策略。', score: 4 },
+      { question: '你会怎样设计模型 API 的超时与重试？', answer: '根据模型服务设置超时，失败后可以重试。如果多次失败，可以提示用户再试。', note: '基础方向正确，需补充幂等、退避和费用控制。', score: 3 },
+    ],
+    strengths: ['具备端到端产品实现意识', '熟悉 SSE 等交互方式'],
+    weaknesses: ['异常和重试策略描述较笼统', '项目交付效果缺少数据'],
+    suggestions: ['准备一次从 Vue 页面到 Java API 再到模型服务的请求链路图。', '补充模型调用的超时、重试、限流和成本统计方案。'],
+    learning: ['练习完整描述一条 AI 请求的端到端数据流。', '为现有项目补充接口错误与重试策略。'],
+  },
+]
+
+function loadCollection(key, fallback) {
+  try {
+    const saved = localStorage.getItem(`interviewmirror-${key}`)
+    return saved ? JSON.parse(saved) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+const resumes = ref(loadCollection('resumes', seedResumes))
+const banks = ref(loadCollection('banks', seedBanks))
+const reports = ref(loadCollection('reports', seedReports))
+const page = ref('home')
+const selectedNav = computed(() => (['reportDetail', 'gapDetail'].includes(page.value) ? 'reports' : page.value))
+const selectedReportId = ref(reports.value[0]?.id ?? null)
+const currentReport = computed(() => reports.value.find((report) => report.id === selectedReportId.value) ?? reports.value[0])
+const mode = ref('COMPREHENSIVE')
+const selectedResumeId = ref(resumes.value.find((resume) => resume.default)?.id ?? resumes.value[0]?.id ?? '')
+const selectedBankId = ref(banks.value[0]?.id ?? '')
+const jdText = ref('')
+const interviewStage = ref('setup')
+const questionIndex = ref(0)
+const followupCount = ref(0)
+const currentQuestion = ref('')
+const answerText = ref('')
+const isThinking = ref(false)
+const messages = ref([])
+const turns = ref([])
+const reportTitleDraft = ref('')
+const toast = ref('')
+const reviewDialog = ref(false)
+const pendingReview = ref(null)
+const resumeInput = ref(null)
+const bankInput = ref(null)
+const startedAt = ref(null)
+let toastTimer
+
+const interviewScript = [
+  {
+    question: '请结合你的项目经历，介绍一个你最熟悉的 AI 应用项目。你负责了什么，解决了什么问题？',
+    followup: '你刚才提到负责了检索链路。能具体说说你做过的一个关键技术取舍，以及它带来的结果吗？',
+  },
+  {
+    question: '如果要判断一个 RAG 应用的回答质量，你会怎样设计一套可持续运行的评估方案？',
+    followup: '你会如何处理评估集更新后，新旧版本之间的结果可比性？',
+  },
+  {
+    question: '模型服务出现间歇性超时，但用户仍需要完成面试练习，你会如何设计这条链路？',
+    followup: '如果重试会增加费用，你会怎样设置重试边界和用户提示？',
+  },
+  {
+    question: '回到你最熟悉的项目，如果再给你两周时间，你会优先完善什么？为什么？',
+    followup: '你会用什么指标验证这两周的改动确实有效？',
+  },
+]
+const activeScript = ref(interviewScript)
+
+watch(resumes, (value) => localStorage.setItem('interviewmirror-resumes', JSON.stringify(value)), { deep: true })
+watch(banks, (value) => localStorage.setItem('interviewmirror-banks', JSON.stringify(value)), { deep: true })
+watch(reports, (value) => localStorage.setItem('interviewmirror-reports', JSON.stringify(value)), { deep: true })
+
+const pageHeading = computed(() => ({
+  home: ['工作台', '为下一场面试，先练一次。'],
+  practice: ['模拟面试', '选择练习方式，开始一场专注的模拟面试。'],
+  reports: ['历史报告', '回看每一次练习，找到持续进步的证据。'],
+  reportDetail: ['面试复盘', '把表现拆解清楚，让下一次准备更有方向。'],
+  gapDetail: ['岗位差异分析', '从岗位要求、简历证据和面试表现中定位差距。'],
+  banks: ['自定义题库', '整理你的题目，在专项面试中逐题练习。'],
+  resumes: ['我的简历', '确认简历信息后，AI 才会用它生成个性化问题。'],
+}[page.value] ?? ['工作台', '']))
+
+const comprehensiveCount = computed(() => reports.value.filter((report) => report.mode === '综合面试').length)
+const averageScore = computed(() => {
+  if (!reports.value.length) return '—'
+  return Math.round(reports.value.reduce((total, report) => total + report.overallScore, 0) / reports.value.length)
+})
+
+function showToast(message) {
+  toast.value = message
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (toast.value = ''), 2600)
+}
+
+function navigate(destination) {
+  page.value = destination
+  if (destination === 'practice') interviewStage.value = 'setup'
+}
+
+function openReport(report) {
+  selectedReportId.value = report.id
+  page.value = 'reportDetail'
+}
+
+function openGapAnalysis() {
+  if (!currentReport.value?.hasJD) return
+  page.value = 'gapDetail'
+}
+
+function restartReport(report) {
+  mode.value = report.mode === '综合面试' ? 'COMPREHENSIVE' : 'QUESTION_BANK'
+  selectedResumeId.value = report.resumeId ?? resumes.value.find((item) => item.default)?.id ?? resumes.value[0]?.id ?? ''
+  selectedBankId.value = report.bankId ?? banks.value[0]?.id ?? ''
+  jdText.value = report.mode === '综合面试' ? report.jdText ?? '' : ''
+  navigate('practice')
+}
+
+function selectMode(nextMode) {
+  mode.value = nextMode
+}
+
+function beginInterview() {
+  if (mode.value === 'COMPREHENSIVE') {
+    const resume = resumes.value.find((item) => item.id === selectedResumeId.value && item.ready)
+    if (!resume) return showToast('请先选择一份已确认的简历')
+    if (jdText.value.trim().length > 1500) return showToast('JD 请控制在 1500 字以内')
+    reportTitleDraft.value = jdText.value.trim().slice(0, 26) || 'AI 应用 / AI 全栈实习'
+  } else {
+    const bank = banks.value.find((item) => item.id === selectedBankId.value && item.ready)
+    if (!bank) return showToast('请先选择一份已确认的题库')
+    reportTitleDraft.value = bank.name
+    const questions = bank.questionItems?.length ? bank.questionItems : [
+      '请介绍一个你最有代表性的项目，以及你负责的部分。',
+      '你在项目中遇到的最大技术挑战是什么？',
+      '如果重新实现这个项目，你会优先改进什么？',
+    ]
+    activeScript.value = questions.map((question) => ({
+      question,
+      followup: `关于“${question.slice(0, 18)}”，能结合一次具体经历说明你的判断和结果吗？`,
+    }))
+  }
+
+  if (mode.value === 'COMPREHENSIVE') activeScript.value = interviewScript
+
+  interviewStage.value = 'active'
+  page.value = 'practice'
+  questionIndex.value = 0
+  followupCount.value = 0
+  turns.value = []
+  messages.value = []
+  answerText.value = ''
+  startedAt.value = Date.now()
+  askQuestion(activeScript.value[0].question)
+}
+
+function askQuestion(question) {
+  currentQuestion.value = question
+  isThinking.value = true
+  setTimeout(() => {
+    messages.value.push({ role: 'assistant', content: question, time: '刚刚' })
+    isThinking.value = false
+  }, 480)
+}
+
+function submitAnswer() {
+  const answer = answerText.value.trim()
+  if (!answer || isThinking.value) return
+  turns.value.push({ question: currentQuestion.value, answer, note: '回答已记录，完整表现将在面试结束后统一复盘。', score: null })
+  messages.value.push({ role: 'user', content: answer, time: '刚刚' })
+  answerText.value = ''
+  const current = activeScript.value[questionIndex.value]
+
+  if (answer.length < 58 && followupCount.value === 0 && current.followup) {
+    followupCount.value = 1
+    askQuestion(current.followup)
+    return
+  }
+
+  questionIndex.value += 1
+  followupCount.value = 0
+  if (questionIndex.value >= activeScript.value.length) {
+    finishInterview()
+  } else {
+    askQuestion(activeScript.value[questionIndex.value].question)
+  }
+}
+
+function finishInterview() {
+  interviewStage.value = 'setup'
+  isThinking.value = false
+  const elapsed = startedAt.value ? Math.max(1, Math.round((Date.now() - startedAt.value) / 60000)) : 18
+  const hasJD = mode.value === 'COMPREHENSIVE' && Boolean(jdText.value.trim())
+  const report = {
+    ...seedReports[0],
+    id: `report-${Date.now()}`,
+    title: mode.value === 'COMPREHENSIVE' ? reportTitleDraft.value : reportTitleDraft.value,
+    mode: mode.value === 'COMPREHENSIVE' ? '综合面试' : '题库专项',
+    resumeId: mode.value === 'COMPREHENSIVE' ? selectedResumeId.value : null,
+    bankId: mode.value === 'QUESTION_BANK' ? selectedBankId.value : null,
+    jdText: mode.value === 'COMPREHENSIVE' ? jdText.value.trim() : '',
+    date: new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date()),
+    duration: `${elapsed} 分钟`,
+    questionCount: Math.max(1, turns.value.length),
+    overallScore: 78 + Math.floor(Math.random() * 12),
+    hasJD,
+    matchScore: hasJD ? 72 + Math.floor(Math.random() * 20) : null,
+    coverage: hasJD ? '7 / 9 项已评估' : null,
+    oneLine: hasJD ? '当前经历与岗位方向较匹配；进一步量化项目结果，补强评估与稳定性证据。' : null,
+    turns: turns.value.length ? [...turns.value] : seedReports[0].turns.slice(0, 2),
+    gaps: hasJD ? seedReports[0].gaps : [],
+    scores: seedReports[0].scores.map((item) => ({ ...item })),
+  }
+  reports.value.unshift(report)
+  selectedReportId.value = report.id
+  page.value = 'reportDetail'
+  showToast('面试已结束，复盘报告已生成')
+}
+
+function exportPdf() {
+  showToast('打开打印窗口后，可选择“另存为 PDF”')
+  window.setTimeout(() => window.print(), 250)
+}
+
+function openResumePicker() {
+  resumeInput.value?.click()
+}
+
+function onResumeSelected(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  if (file.size > 20 * 1024 * 1024) return showToast('文件不能超过 20MB')
+  pendingReview.value = {
+    type: 'resume', name: file.name, size: formatSize(file.size),
+    education: '本科 · 计算机科学与技术', skills: 'Java、Spring Boot、Vue 3、RAG、LangGraph',
+    project: '企业知识库问答系统：负责检索链路、模型接入与评测',
+  }
+  reviewDialog.value = true
+}
+
+function openBankPicker() {
+  bankInput.value?.click()
+}
+
+function onBankSelected(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  if (file.size > 20 * 1024 * 1024) return showToast('文件不能超过 20MB')
+  const extension = file.name.split('.').pop()?.toUpperCase() || '文档'
+  pendingReview.value = {
+    type: 'bank', name: file.name.replace(/\.[^.]+$/, ''), fileName: file.name,
+    size: formatSize(file.size), questions: [
+      '请介绍一下你对 RAG 检索链路的理解。',
+      '你会如何设计一个 AI 应用的离线评测集？',
+      '模型 API 超时或返回异常时，你会如何处理？',
+    ], format: extension,
+  }
+  reviewDialog.value = true
+}
+
+function createBlankBank() {
+  pendingReview.value = {
+    type: 'bank', name: '我的新题库', fileName: '手动创建', size: '—', format: '自建',
+    questions: ['请介绍一个最有代表性的项目。', '你在项目中遇到的最大挑战是什么？'],
+  }
+  reviewDialog.value = true
+}
+
+function addQuestion() {
+  pendingReview.value?.questions.push('请输入一道新问题')
+}
+
+function removeQuestion(index) {
+  pendingReview.value?.questions.splice(index, 1)
+}
+
+function confirmReview() {
+  if (!pendingReview.value) return
+  if (pendingReview.value.type === 'resume') {
+    const item = {
+      id: `resume-${Date.now()}`, name: pendingReview.value.name, updated: '刚刚', ready: true,
+      default: resumes.value.length === 0, size: pendingReview.value.size, projects: 1,
+      education: pendingReview.value.education, skills: pendingReview.value.skills, project: pendingReview.value.project,
+    }
+    resumes.value.unshift(item)
+    selectedResumeId.value = item.id
+    page.value = 'resumes'
+    showToast('简历信息已确认并保存到本地演示数据')
+  } else {
+    const questions = pendingReview.value.questions.map((item) => item.trim()).filter(Boolean)
+    if (!questions.length) return showToast('题库至少需要保留一道问题')
+    const item = {
+      id: `bank-${Date.now()}`, name: pendingReview.value.name || '未命名题库', updated: '刚刚',
+      ready: true, questions: questions.length, format: pendingReview.value.format,
+      questionItems: questions,
+    }
+    banks.value.unshift(item)
+    selectedBankId.value = item.id
+    page.value = 'banks'
+    showToast(`已确认 ${questions.length} 道题目`)
+  }
+  pendingReview.value = null
+  reviewDialog.value = false
+}
+
+function deleteResume(resume) {
+  resumes.value = resumes.value.filter((item) => item.id !== resume.id)
+  if (selectedResumeId.value === resume.id) selectedResumeId.value = resumes.value[0]?.id ?? ''
+  showToast('简历已从本地演示数据中删除')
+}
+
+function setDefaultResume(resume) {
+  resumes.value = resumes.value.map((item) => ({ ...item, default: item.id === resume.id }))
+  showToast('已设为默认简历')
+}
+
+function deleteBank(bank) {
+  banks.value = banks.value.filter((item) => item.id !== bank.id)
+  if (selectedBankId.value === bank.id) selectedBankId.value = banks.value[0]?.id ?? ''
+  showToast('题库已删除')
+}
+
+function useBankForPractice(bank) {
+  selectedBankId.value = bank.id
+  mode.value = 'QUESTION_BANK'
+  page.value = 'practice'
+  interviewStage.value = 'setup'
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function resetDemo() {
+  if (!window.confirm('重置会清除本机保存的演示资料和新增报告，恢复初始样例。继续吗？')) return
+  resumes.value = [...seedResumes]
+  banks.value = [...seedBanks]
+  reports.value = [...seedReports]
+  selectedResumeId.value = seedResumes[0].id
+  selectedBankId.value = seedBanks[0].id
+  selectedReportId.value = seedReports[0].id
+  page.value = 'home'
+  localStorage.removeItem('interviewmirror-resumes')
+  localStorage.removeItem('interviewmirror-banks')
+  localStorage.removeItem('interviewmirror-reports')
+  showToast('演示数据已重置')
+}
+</script>
+
+<template>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#home" @click.prevent="navigate('home')">
+        <span class="brand-mark"><span></span></span>
+        <span class="brand-copy"><strong>面镜</strong><small>InterviewMirror</small></span>
+      </a>
+
+      <div class="workspace-label">练习空间</div>
+      <nav class="primary-nav" aria-label="主导航">
+        <button v-for="item in navItems" :key="item.id" class="nav-item" :class="{ active: selectedNav === item.id }" @click="navigate(item.id)">
+          <svg v-if="item.icon === 'home'" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" /></svg>
+          <svg v-else-if="item.icon === 'mic'" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8" /></svg>
+          <svg v-else-if="item.icon === 'report'" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M9 12h6m-6 4h6" /></svg>
+          <svg v-else-if="item.icon === 'bank'" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20" /></svg>
+          <svg v-else viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6m-6 4h6m-6 4h4" /></svg>
+          <span>{{ item.label }}</span>
+          <span v-if="item.id === 'reports'" class="nav-count">{{ reports.length }}</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="local-card">
+          <span class="local-pulse"></span>
+          <div><strong>本地演示模式</strong><small>资料仅保存在此浏览器</small></div>
+        </div>
+        <button class="profile-button" @click="showToast('当前为本地演示账号：林同学')">
+          <span class="avatar">林</span>
+          <span class="profile-copy"><strong>林同学</strong><small>求职者</small></span>
+          <span class="more-dots">···</span>
+        </button>
+      </div>
+    </aside>
+
+    <main class="main-area">
+      <header class="topbar">
+        <div class="breadcrumbs"><span>面镜</span><span class="crumb-slash">/</span><strong>{{ pageHeading[0] }}</strong></div>
+        <div class="topbar-actions">
+          <span class="demo-pill"><span></span>交互演示</span>
+          <button class="icon-button" title="重置演示数据" @click="resetDemo">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.64-6.36L3 8"/><path d="M3 3v5h5m4-1v5l3 2"/></svg>
+          </button>
+          <button class="help-button" @click="showToast('这是面镜的本地交互演示')">帮助</button>
+        </div>
+      </header>
+
+      <div class="page-content">
+        <template v-if="page === 'home'">
+          <section class="hero-card">
+            <div class="hero-copy">
+              <span class="eyebrow"><span class="sparkle">✦</span> 给下一场面试一点准备时间</span>
+              <h1>练得更清楚，<br /><span>表达就更有底气。</span></h1>
+              <p>把简历、岗位要求和真实问题变成一次有反馈的练习。每一次回答，都能成为下一次进步的线索。</p>
+              <button class="primary-button hero-button" @click="navigate('practice')">开始模拟面试 <span>→</span></button>
+              <div class="hero-proof"><span class="proof-icon">✓</span>AI 追问 · 证据复盘 · 本地演示</div>
+            </div>
+            <div class="hero-visual" aria-hidden="true">
+              <div class="sun-orbit orbit-one"></div><div class="sun-orbit orbit-two"></div>
+              <div class="hero-sun"><span>镜</span></div>
+              <div class="mini-chat chat-top"><span class="mini-chat-dot"></span><div><small>AI 面试官</small><strong>你是如何评估项目效果的？</strong></div></div>
+              <div class="mini-chat chat-bottom"><span class="mini-avatar">林</span><div><small>你的回答</small><strong>我先建立了固定的问题集…</strong></div></div>
+              <div class="visual-note"><span>✦</span> 一次只进步一点点</div>
+            </div>
+          </section>
+
+          <section class="section-block">
+            <div class="section-heading"><div><span class="section-kicker">PRACTICE</span><h2>选择一种练习方式</h2><p>从岗位综合模拟开始，或围绕自己的题库集中突破。</p></div><button class="text-button" @click="navigate('practice')">全部面试方式 <span>→</span></button></div>
+            <div class="practice-cards">
+              <button class="practice-card comprehensive-card" @click="selectMode('COMPREHENSIVE'); navigate('practice')">
+                <span class="card-icon icon-yellow"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M8 7h8m-8 4h5"/></svg></span>
+                <span class="card-label">推荐练习</span><strong>综合面试</strong><span class="card-description">结合简历和目标岗位，进行贴近真实面试的多轮追问。</span>
+                <span class="card-meta"><span>简历必选</span><span>JD 可选</span><span>岗位差异分析</span></span>
+                <span class="card-arrow">开始练习 <b>→</b></span>
+                <span class="card-decoration decoration-sun"></span>
+              </button>
+              <button class="practice-card bank-card" @click="selectMode('QUESTION_BANK'); navigate('practice')">
+                <span class="card-icon icon-peach"><svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20"/></svg></span>
+                <span class="card-label label-neutral">集中训练</span><strong>专项面试</strong><span class="card-description">从自定义题库逐题抽问，专注练习知识点与表达。</span>
+                <span class="card-meta"><span>选择题库</span><span>动态追问</span><span>逐题复盘</span></span>
+                <span class="card-arrow">进入题库练习 <b>→</b></span>
+                <span class="card-decoration decoration-grid"></span>
+              </button>
+            </div>
+          </section>
+
+          <section class="overview-grid">
+            <div class="overview-card progress-card">
+              <div class="overview-head"><div><span class="section-kicker">YOUR PROGRESS</span><h3>练习概览</h3></div><span class="date-chip">本地记录</span></div>
+              <div class="stat-row">
+                <div class="stat-item"><strong>{{ reports.length }}</strong><span>已完成面试</span><small>持续积累中</small></div>
+                <div class="stat-item"><strong>{{ averageScore }}<small class="stat-unit">分</small></strong><span>平均表现</span><small>基于历史报告</small></div>
+                <div class="stat-item"><strong>{{ comprehensiveCount }}</strong><span>综合面试</span><small>含岗位复盘</small></div>
+              </div>
+              <div class="progress-footer"><span class="progress-spark">✦</span><span>每次练习都会留下一条进步线索</span><button @click="navigate('reports')">查看报告 <b>→</b></button></div>
+            </div>
+            <div class="overview-card prep-card">
+              <span class="prep-bubble">✦</span><span class="section-kicker">BEFORE YOU START</span><h3>先准备好这些</h3>
+              <button class="prep-link" @click="navigate('resumes')"><span class="prep-number">01</span><span><strong>确认一份简历</strong><small>{{ resumes.length }} 份简历 · {{ resumes.filter((r) => r.ready).length }} 份可用</small></span><b>→</b></button>
+              <button class="prep-link" @click="navigate('banks')"><span class="prep-number">02</span><span><strong>整理你的题库</strong><small>{{ banks.length }} 份题库 · 随时开始专项练习</small></span><b>→</b></button>
+            </div>
+          </section>
+
+          <section class="section-block recent-block">
+            <div class="section-heading compact-heading"><div><span class="section-kicker">RECENT REPORTS</span><h2>最近的练习</h2></div><button class="text-button" @click="navigate('reports')">查看全部 <span>→</span></button></div>
+            <div v-if="reports.length" class="recent-list">
+              <button v-for="report in reports.slice(0, 2)" :key="report.id" class="recent-report" @click="openReport(report)">
+                <span class="recent-file"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M9 12h6m-6 4h6"/></svg></span>
+                <span class="recent-main"><strong>{{ report.title }}</strong><small>{{ report.mode }} <i>·</i> {{ report.date }}</small></span>
+                <span v-if="report.hasJD" class="match-mini"><small>岗位匹配</small><strong>{{ report.matchScore }}<small>分</small></strong></span>
+                <span class="score-mini"><small>综合表现</small><strong>{{ report.overallScore }}<small>分</small></strong></span>
+                <span class="row-arrow">→</span>
+              </button>
+            </div>
+            <div v-else class="empty-state"><span>✦</span><strong>还没有面试记录</strong><p>完成第一场练习后，报告会出现在这里。</p></div>
+          </section>
+          <footer class="page-footer"><span>面镜 InterviewMirror</span><span>练习为成长服务，评价仅作自我复盘参考</span></footer>
+        </template>
+
+        <template v-else-if="page === 'practice' && interviewStage === 'setup'">
+          <div class="page-intro"><div><span class="section-kicker">PRACTICE ROOM</span><h1>{{ pageHeading[0] }}</h1><p>{{ pageHeading[1] }}</p></div><span class="intro-illustration">✦</span></div>
+          <div class="mode-switch" role="tablist" aria-label="面试模式">
+            <button :class="{ selected: mode === 'COMPREHENSIVE' }" @click="selectMode('COMPREHENSIVE')"><span class="switch-icon">◉</span><span><strong>综合面试</strong><small>结合简历和岗位目标</small></span></button>
+            <button :class="{ selected: mode === 'QUESTION_BANK' }" @click="selectMode('QUESTION_BANK')"><span class="switch-icon switch-peach">▤</span><span><strong>专项面试</strong><small>使用自定义题库练习</small></span></button>
+          </div>
+
+          <div class="setup-layout">
+            <section class="panel setup-form">
+              <div class="panel-heading"><div><span class="section-kicker">INTERVIEW SETUP</span><h2>{{ mode === 'COMPREHENSIVE' ? '设置综合面试' : '设置专项面试' }}</h2></div><span class="step-indicator">1 <i>/</i> 2</span></div>
+              <template v-if="mode === 'COMPREHENSIVE'">
+                <label class="field-label">选择简历 <span class="required-star">*</span></label>
+                <div class="resume-select-list">
+                  <label v-for="resume in resumes.filter((item) => item.ready)" :key="resume.id" class="select-option" :class="{ chosen: selectedResumeId === resume.id }">
+                    <input v-model="selectedResumeId" type="radio" :value="resume.id" />
+                    <span class="document-icon"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M9 12h6m-6 4h5"/></svg></span>
+                    <span class="option-copy"><strong>{{ resume.name }}</strong><small>{{ resume.updated }} 更新 · {{ resume.projects }} 段项目经历</small></span>
+                    <span v-if="resume.default" class="default-tag">默认</span><span class="radio-custom"></span>
+                  </label>
+                  <button class="add-inline" @click="openResumePicker">＋ 上传新简历</button>
+                  <p v-if="!resumes.some((item) => item.ready)" class="inline-hint error-hint">请先在“我的简历”上传并确认一份简历。</p>
+                </div>
+                <label class="field-label jd-label" for="jd-input">目标岗位 JD <span class="optional-tag">选填</span></label>
+                <textarea id="jd-input" v-model="jdText" class="text-field jd-field" maxlength="1500" placeholder="粘贴岗位职责与任职要求…\n\n有 JD 时，系统会在报告中加入岗位差异化分析；没有 JD 也可以开始综合练习。"></textarea>
+                <div class="field-footnote"><span>最多 1500 字</span><span>{{ jdText.length }} / 1500</span></div>
+                <div class="privacy-note"><span>◇</span><span>纯前端交互演示：不会上传原始文件，也不会调用模型 API；仅在此浏览器保存确认后的模拟字段。</span></div>
+              </template>
+              <template v-else>
+                <label class="field-label">选择自定义题库 <span class="required-star">*</span></label>
+                <div class="bank-select-list">
+                  <label v-for="bank in banks.filter((item) => item.ready)" :key="bank.id" class="select-option bank-option" :class="{ chosen: selectedBankId === bank.id }">
+                    <input v-model="selectedBankId" type="radio" :value="bank.id" />
+                    <span class="document-icon bank-document"><svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20"/></svg></span>
+                    <span class="option-copy"><strong>{{ bank.name }}</strong><small>{{ bank.questions }} 道题 · {{ bank.format }} · {{ bank.updated }} 更新</small></span>
+                    <span class="radio-custom"></span>
+                  </label>
+                  <button class="add-inline" @click="navigate('banks')">＋ 管理我的题库</button>
+                  <p v-if="!banks.some((item) => item.ready)" class="inline-hint error-hint">请先上传并确认一份题库。</p>
+                </div>
+                <div class="bank-mode-note"><span class="note-icon">✦</span><div><strong>专注练习，不依赖简历</strong><p>AI 会围绕题库原题继续追问，并在报告中逐题复盘。本模式不会生成岗位差异分析。</p></div></div>
+              </template>
+
+              <div class="form-actions"><button class="subtle-button" @click="navigate('home')">返回</button><button class="primary-button" @click="beginInterview">开始面试 <span>→</span></button></div>
+            </section>
+            <aside class="setup-aside">
+              <div class="panel expectation-card"><span class="aside-spark">✦</span><span class="section-kicker">WHAT TO EXPECT</span><h3>这场练习会这样进行</h3>
+                <div class="expect-step"><span>01</span><div><strong>逐题作答</strong><small>像真实面试一样，一次回答一个问题。</small></div></div>
+                <div class="expect-step"><span>02</span><div><strong>根据回答追问</strong><small>回答不够具体时，面试官会继续深入。</small></div></div>
+                <div class="expect-step"><span>03</span><div><strong>结束后完整复盘</strong><small>查看逐题反馈、优势与下一步建议。</small></div></div>
+                <div class="duration-chip"><span>◷</span> 建议预留 20–30 分钟</div>
+              </div>
+              <div class="aside-tip"><span class="tip-star">✦</span><p>不知道怎么回答也没关系。先说出你的思路，复盘时再一起拆解。</p></div>
+            </aside>
+          </div>
+        </template>
+
+        <template v-else-if="page === 'practice' && interviewStage === 'active'">
+          <section class="interview-topline"><button class="back-link" @click="finishInterview">← 结束并查看复盘</button><span class="live-label"><span></span>练习进行中</span><span class="mode-chip">{{ mode === 'COMPREHENSIVE' ? '综合面试' : '题库专项' }}</span></section>
+          <section class="interview-layout">
+            <div class="interview-main panel">
+              <div class="interview-header"><div><span class="section-kicker">AI INTERVIEWER</span><h1>{{ reportTitleDraft }}</h1><p>{{ mode === 'COMPREHENSIVE' ? '面试官会根据你的回答继续追问。' : `围绕「${banks.find((bank) => bank.id === selectedBankId)?.name ?? '自定义题库'}」进行练习。` }}</p></div><div class="progress-ring"><span>{{ Math.min(questionIndex + 1, activeScript.length) }}</span><small>/ {{ activeScript.length }}</small></div></div>
+              <div class="question-progress"><span :style="{ width: `${Math.max(8, (questionIndex / activeScript.length) * 100)}%` }"></span></div>
+              <div class="chat-timeline">
+                <div class="timeline-date">今天 · 面试开始</div>
+                <div v-for="(message, index) in messages" :key="index" class="chat-message" :class="message.role">
+                  <span class="chat-avatar" :class="message.role === 'assistant' ? 'ai-avatar' : 'user-avatar'">{{ message.role === 'assistant' ? '镜' : '林' }}</span>
+                  <div class="message-body"><div class="message-meta"><strong>{{ message.role === 'assistant' ? 'AI 面试官' : '我' }}</strong><small>{{ message.time }}</small></div><div class="message-bubble">{{ message.content }}</div></div>
+                </div>
+                <div v-if="isThinking" class="chat-message assistant"><span class="chat-avatar ai-avatar">镜</span><div class="message-body"><div class="message-meta"><strong>AI 面试官</strong><small>正在思考</small></div><div class="typing-bubble"><i></i><i></i><i></i></div></div></div>
+              </div>
+              <div class="answer-box"><textarea v-model="answerText" :disabled="isThinking" placeholder="输入你的回答…（Enter 发送，Shift + Enter 换行）" @keydown.enter.exact.prevent="submitAnswer"></textarea><div class="answer-controls"><span>尽量结合具体经历和结果回答</span><button class="send-button" :disabled="!answerText.trim() || isThinking" @click="submitAnswer">发送回答 <span>↑</span></button></div></div>
+            </div>
+            <aside class="interview-aside"><div class="panel session-card"><span class="section-kicker">SESSION GUIDE</span><h3>保持你的节奏</h3><div class="session-stat"><span>当前进度</span><strong>问题 {{ Math.min(questionIndex + 1, activeScript.length) }} <small>/ {{ activeScript.length }}</small></strong></div><div class="session-stat"><span>追问方式</span><strong>根据回答动态深入</strong></div><div class="session-separator"></div><p><span>✦</span> 不需要追求完美答案。先讲清你的判断和经历。</p><button class="end-session" @click="finishInterview">结束本次面试</button></div>
+              <div class="panel interview-context"><span class="section-kicker">本场资料</span><div v-if="mode === 'COMPREHENSIVE'" class="context-file"><span class="document-icon"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5"/></svg></span><div><strong>{{ resumes.find((resume) => resume.id === selectedResumeId)?.name }}</strong><small>简历已确认</small></div></div><div v-if="jdText.trim()" class="context-jd"><strong>目标 JD</strong><p>{{ jdText.slice(0, 120) }}{{ jdText.length > 120 ? '…' : '' }}</p></div><div v-if="mode === 'QUESTION_BANK'" class="context-file"><span class="document-icon bank-document"><svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20"/></svg></span><div><strong>{{ banks.find((bank) => bank.id === selectedBankId)?.name }}</strong><small>{{ banks.find((bank) => bank.id === selectedBankId)?.questions }} 道已确认题目</small></div></div></div></aside>
+          </section>
+        </template>
+
+        <template v-else-if="page === 'reports'">
+          <div class="page-intro"><div><span class="section-kicker">YOUR JOURNEY</span><h1>历史报告</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" @click="navigate('practice')">＋ 新建面试</button></div>
+          <div class="report-summary-strip"><div><span class="summary-icon">◷</span><span><small>累计练习</small><strong>{{ reports.length }} <small>场</small></strong></span></div><div><span class="summary-icon peach-summary">✦</span><span><small>平均表现</small><strong>{{ averageScore }} <small>分</small></strong></span></div><div><span class="summary-icon green-summary">↗</span><span><small>含岗位差异分析</small><strong>{{ reports.filter((r) => r.hasJD).length }} <small>份</small></strong></span></div></div>
+          <section class="panel report-list-panel"><div class="list-panel-heading"><div><span class="section-kicker">ALL SESSIONS</span><h2>全部面试记录 <span>{{ reports.length }}</span></h2></div><div class="sort-select">最近练习 <span>⌄</span></div></div>
+            <div v-if="reports.length" class="report-table">
+              <div class="table-head"><span>面试与岗位</span><span>类型</span><span>时间</span><span>岗位匹配</span><span>综合评分</span><span></span></div>
+              <button v-for="report in reports" :key="report.id" class="report-row" @click="openReport(report)">
+                <span class="report-name-cell"><span class="recent-file"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M9 12h6m-6 4h6"/></svg></span><span><strong>{{ report.title }}</strong><small>{{ report.questionCount }} 道问题 · {{ report.duration }}</small></span></span>
+                <span><i class="type-pill" :class="report.hasJD ? 'type-comprehensive' : 'type-special'">{{ report.mode }}</i></span>
+                <span class="table-date">{{ report.date }}</span>
+                <span><strong v-if="report.hasJD" class="table-match">{{ report.matchScore }}<small>分</small></strong><small v-else class="na-label">不适用</small></span>
+                <span><strong class="table-score">{{ report.overallScore }}<small>分</small></strong></span><span class="row-arrow">→</span>
+              </button>
+            </div>
+            <div v-else class="empty-state"><span>✦</span><strong>完成一场练习，开启你的复盘记录</strong><button class="primary-button" @click="navigate('practice')">开始模拟面试</button></div>
+          </section>
+        </template>
+
+        <template v-else-if="page === 'reportDetail' && currentReport">
+          <div class="report-detail-top"><button class="back-link" @click="navigate('reports')">← 返回历史报告</button><div class="report-actions"><button class="subtle-button" @click="restartReport(currentReport)">↻ 重新面试</button><button class="primary-button" @click="exportPdf"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v4h14v-4"/></svg> 导出 PDF</button></div></div>
+          <section class="report-cover"><div><span class="section-kicker">INTERVIEW REPORT</span><div class="report-title-line"><h1>{{ currentReport.title }}</h1><span class="type-pill" :class="currentReport.hasJD ? 'type-comprehensive' : 'type-special'">{{ currentReport.mode }}</span></div><div class="report-meta"><span>◷ {{ currentReport.date }}</span><i>·</i><span>{{ currentReport.duration }}</span><i>·</i><span>{{ currentReport.questionCount }} 道问题</span></div></div><div class="cover-score"><span>综合表现</span><strong>{{ currentReport.overallScore }}</strong><small>/ 100</small><div class="score-meter"><span :style="{ width: `${currentReport.overallScore}%` }"></span></div><small class="score-caption">稳步成长中</small></div></section>
+
+          <section class="report-section report-evaluation"><div class="report-section-heading"><span class="section-number">01</span><div><span class="section-kicker">OVERALL REVIEW</span><h2>总体评价</h2></div></div><div class="overall-note"><span class="quote-mark">“</span><p>{{ currentReport.overall }}</p></div><div class="score-grid"><div v-for="(item, index) in currentReport.scores" :key="item.label" class="score-card"><div class="score-card-top"><span>{{ item.label }}</span><strong v-if="item.score !== null">{{ item.score.toFixed(1) }}<small>/5</small></strong><strong v-else class="score-na">—</strong></div><div class="score-bar"><span :style="{ width: item.score === null ? '0%' : `${item.score * 20}%` }" :class="`bar-tone-${index}`"></span></div><p>{{ item.note }}</p></div></div></section>
+
+          <section class="report-section"><div class="report-section-heading"><span class="section-number">02</span><div><span class="section-kicker">QUESTION BY QUESTION</span><h2>问答逐题回顾</h2></div><span class="heading-side-note">{{ currentReport.turns.length }} 条回答记录</span></div><div class="turn-list"><article v-for="(turn, index) in currentReport.turns" :key="index" class="turn-card"><div class="turn-heading"><span class="turn-number">Q{{ String(index + 1).padStart(2, '0') }}</span><span class="turn-topic">{{ index === 0 ? '项目经历' : index === 1 ? '技术理解' : '问题解决' }}</span><span v-if="turn.score" class="turn-score">表现 {{ turn.score }}/5</span></div><h3>{{ turn.question }}</h3><div class="answer-quote"><span>你的回答</span><p>“{{ turn.answer }}”</p></div><div class="turn-feedback"><span>✦</span><p>{{ turn.note }}</p></div></article></div></section>
+
+          <section v-if="currentReport.hasJD" class="report-section diff-summary-section"><div class="report-section-heading"><span class="section-number">03</span><div><span class="section-kicker">ROLE GAP SUMMARY</span><h2>岗位差异化分析</h2></div><span class="evidence-badge"><span></span>基于简历、JD 与本场回答</span></div>
+            <div class="diff-summary-card"><div class="match-score-panel"><span class="match-caption">岗位匹配度</span><div class="match-score"><strong>{{ currentReport.matchScore }}</strong><span>/ 100</span></div><div class="match-progress"><span :style="{ width: `${currentReport.matchScore}%` }"></span></div><small>{{ currentReport.coverage }} · 已排除未评估项</small></div>
+              <div class="summary-gaps"><div class="summary-subhead"><strong>优先关注的差距</strong><small>TOP {{ Math.min(3, currentReport.gaps.length) }}</small></div><div v-for="(gap, index) in currentReport.gaps.slice(0, 3)" :key="gap.title" class="summary-gap"><span class="gap-rank">0{{ index + 1 }}</span><span>{{ gap.title }}</span><i :class="gap.priority === '高' ? 'priority-high' : 'priority-mid'">{{ gap.priority }}</i></div><p v-if="!currentReport.gaps.length" class="no-gap-note">当前没有足够证据生成差距项。</p></div>
+              <div class="summary-radar"><div class="summary-subhead"><strong>岗位能力雷达</strong><small>JD / 简历 / 表现</small></div><svg class="radar-chart" viewBox="0 0 240 190" role="img" aria-label="岗位要求、简历证据和面试表现雷达图"><polygon points="120,22 190,67 164,147 76,147 50,67" class="radar-grid"/><polygon points="120,43 173,77 153,133 86,136 68,80" class="radar-grid"/><polygon points="120,64 155,86 142,119 97,124 85,90" class="radar-grid"/><path d="M120 22v125M50 67l140 0M76 147l88-80M164 147 76 67M120 22 76 147" class="radar-axis"/><polygon points="120,39 168,82 150,133 95,128 72,83" class="radar-area jd-area"/><polygon points="120,56 153,88 138,116 102,120 88,93" class="radar-area resume-area"/><polygon points="120,50 160,85 145,123 96,121 84,86" class="radar-area answer-area"/><text x="120" y="12" text-anchor="middle">技能</text><text x="202" y="67">项目经验</text><text x="170" y="164">问题解决</text><text x="31" y="164">岗位职责</text><text x="19" y="67">交付能力</text></svg><div class="radar-legend"><span><i class="legend-jd"></i>岗位要求</span><span><i class="legend-resume"></i>简历证据</span><span><i class="legend-answer"></i>面试表现</span></div></div>
+              <div class="summary-conclusion"><span class="conclusion-icon">✦</span><div><small>一句话结论</small><p>{{ currentReport.oneLine }}</p></div><button class="text-button" @click="openGapAnalysis">查看完整分析 <span>→</span></button></div>
+            </div>
+          </section>
+          <section v-else class="report-section"><div class="report-section-heading"><span class="section-number">03</span><div><span class="section-kicker">ROLE GAP SUMMARY</span><h2>岗位差异化分析</h2></div></div><div class="not-applicable-card"><span>◇</span><div><strong>本场不生成岗位差异分析</strong><p>{{ currentReport.mode === '题库专项' ? '题库专项面试不关联简历和 JD。' : '综合面试未提供 JD。' }}如需岗位匹配度和差距雷达图，请在新建综合面试时粘贴目标岗位 JD。</p></div><button class="subtle-button" @click="mode = 'COMPREHENSIVE'; navigate('practice')">新建综合面试</button></div></section>
+
+          <section class="report-section strengths-grid-section"><div class="report-section-heading"><span class="section-number">04</span><div><span class="section-kicker">YOUR SIGNALS</span><h2>亮点与待提升</h2></div></div><div class="strengths-grid"><div class="strength-panel"><div class="strength-title"><span class="strength-icon">✦</span><h3>亮点与优势</h3></div><ul><li v-for="item in currentReport.strengths" :key="item">{{ item }}</li></ul></div><div class="weakness-panel"><div class="strength-title"><span class="weak-icon">↗</span><h3>薄弱点与不足</h3></div><ul><li v-for="item in currentReport.weaknesses" :key="item">{{ item }}</li></ul></div></div></section>
+          <section class="report-section"><div class="report-section-heading"><span class="section-number">05</span><div><span class="section-kicker">NEXT PRACTICE</span><h2>改进建议与学习路径</h2></div></div><div class="suggestion-list"><div v-for="(item, index) in currentReport.suggestions" :key="item" class="suggestion-item"><span>0{{ index + 1 }}</span><p>{{ item }}</p><i>本周可行动</i></div></div><div class="learning-path"><div class="learning-heading"><span>✦</span><div><strong>你的下一段学习路径</strong><small>先补证据，再练表达，最后回到岗位场景</small></div></div><div class="learning-steps"><div v-for="(item, index) in currentReport.learning" :key="item"><span>{{ String(index + 1).padStart(2, '0') }}</span><p>{{ item }}</p></div></div></div></section>
+          <section class="next-step-card"><div><span class="section-kicker">KEEP THE MOMENTUM</span><h2>下一次，会更清楚。</h2><p>再练一次，把这次复盘变成下一次更好的回答。</p></div><div class="next-step-actions"><button class="subtle-button" @click="navigate('home')">返回主页</button><button class="primary-button" @click="restartReport(currentReport)">重新面试 <span>→</span></button></div></section>
+          <footer class="page-footer"><span>面镜 InterviewMirror</span><span>AI 生成内容用于自我练习与复盘</span></footer>
+        </template>
+
+        <template v-else-if="page === 'gapDetail' && currentReport">
+          <div class="report-detail-top"><button class="back-link" @click="page = 'reportDetail'">← 返回面试报告</button><button class="subtle-button" @click="exportPdf">导出完整报告 PDF</button></div>
+          <div class="gap-page-heading"><span class="section-kicker">FULL ROLE GAP ANALYSIS</span><h1>岗位差异分析</h1><p>{{ currentReport.title }} <i>·</i> {{ currentReport.date }}</p><div class="gap-score-pill"><span>岗位匹配度</span><strong>{{ currentReport.matchScore }}<small>/100</small></strong><span class="gap-score-track"><i :style="{ width: `${currentReport.matchScore}%` }"></i></span><small>{{ currentReport.coverage }}；未评估项不计为不匹配</small></div></div>
+          <section class="analysis-section"><div class="report-section-heading"><span class="section-number">01</span><div><span class="section-kicker">RESUME VS. JD</span><h2>简历与岗位要求</h2></div></div><div class="comparison-grid"><article class="comparison-card"><div class="comparison-title"><span class="comparison-icon jd-icon">JD</span><div><strong>岗位核心要求</strong><small>从目标岗位描述中提取</small></div></div><div class="requirement-row"><span>01</span><p><strong>有 RAG 或知识库问答项目经验</strong><small>“负责企业级知识库与智能问答应用建设”</small></p><i class="requirement-high">核心</i></div><div class="requirement-row"><span>02</span><p><strong>具备评估与效果迭代意识</strong><small>“持续评估并优化大模型应用效果”</small></p><i class="requirement-high">核心</i></div><div class="requirement-row"><span>03</span><p><strong>了解服务部署与稳定性保障</strong><small>“熟悉服务部署、监控及异常处理”</small></p><i class="requirement-mid">重要</i></div></article>
+              <article class="comparison-card"><div class="comparison-title"><span class="comparison-icon resume-icon">简</span><div><strong>简历中的相关证据</strong><small>来自已确认简历</small></div></div><div class="resume-evidence-row"><span class="evidence-check">✓</span><p><strong>实现文档切分、向量召回与重排</strong><small>简历 · 项目经历 1 · 第 2 段</small></p><i class="evidence-match">匹配</i></div><div class="resume-evidence-row"><span class="evidence-check partial">~</span><p><strong>提及检索优化，未给出评估指标</strong><small>简历 · 项目经历 1 · 第 4 段</small></p><i class="evidence-partial">部分</i></div><div class="resume-evidence-row"><span class="evidence-none">—</span><p><strong>暂未找到部署监控的直接证据</strong><small>该要求未在简历中体现</small></p><i class="evidence-unknown">待补证据</i></div></article></div></section>
+
+          <section class="analysis-section"><div class="report-section-heading"><span class="section-number">02</span><div><span class="section-kicker">INTERVIEW VS. ROLE</span><h2>实际表现与岗位要求</h2></div></div><div class="performance-table-wrap"><table class="performance-table"><thead><tr><th>岗位要求</th><th>简历证据</th><th>面试表现</th><th>当前判断</th></tr></thead><tbody><tr><td><strong>RAG 项目经验</strong><small>核心要求</small></td><td><span class="table-status good">● 已体现</span></td><td><span class="table-status good">● 能解释链路</span><small>回答 Q1、Q2</small></td><td><span class="table-status good">匹配</span></td></tr><tr><td><strong>评估与效果迭代</strong><small>核心要求</small></td><td><span class="table-status partial">● 有相关描述</span></td><td><span class="table-status partial">● 指标和流程不完整</span><small>回答 Q3</small></td><td><span class="table-status partial">部分匹配</span></td></tr><tr><td><strong>部署与稳定性</strong><small>重要要求</small></td><td><span class="table-status unknown">— 未找到证据</span></td><td><span class="table-status partial">● 提及重试，边界不足</span><small>回答 Q6</small></td><td><span class="table-status partial">需要补强</span></td></tr></tbody></table></div></section>
+
+          <section class="analysis-section"><div class="report-section-heading"><span class="section-number">03</span><div><span class="section-kicker">GAP ATTRIBUTION</span><h2>差距归因与证据</h2></div></div><div class="gap-detail-list"><article v-for="(gap, index) in currentReport.gaps" :key="gap.title" class="gap-detail-card"><div class="gap-detail-top"><span class="gap-rank">0{{ index + 1 }}</span><span class="gap-type-chip">{{ gap.group }}</span><span class="priority-chip" :class="gap.priority === '高' ? 'priority-high-bg' : 'priority-mid-bg'">{{ gap.priority }}优先级</span></div><h3>{{ gap.title }}</h3><p class="gap-description">{{ gap.detail }}</p><div class="evidence-quote-block"><span>证据来源</span><p>“{{ gap.evidence }}：{{ gap.requirement }}”</p><small>本场回答与已确认资料仅用于练习反馈</small></div></article><div v-if="!currentReport.gaps.length" class="empty-state"><strong>当前没有足够证据生成差距项</strong><p>可以补充简历或回答后再次练习。</p></div></div></section>
+          <section class="gap-next-action"><div><span class="section-kicker">YOUR NEXT MOVE</span><h2>把最高优先级差距带进下一次练习</h2><p>针对一个具体要求补足证据，再用同一岗位方向检验表达效果。</p></div><button class="primary-button" @click="page = 'reportDetail'">回到报告 <span>→</span></button></section>
+        </template>
+
+        <template v-else-if="page === 'banks'">
+          <div class="page-intro"><div><span class="section-kicker">YOUR QUESTION LIBRARY</span><h1>自定义题库</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" @click="openBankPicker">＋ 上传题库</button></div>
+          <div class="library-tip"><span>✦</span><p><strong>先确认解析结果，再开始练习。</strong>支持 PDF、DOCX、TXT 和 Markdown；不会上传原始文件，确认后只保存模拟题目字段。</p><button @click="createBlankBank">手动创建</button></div>
+          <div class="library-toolbar"><div class="library-tabs"><button class="active">全部题库 <span>{{ banks.length }}</span></button><button @click="showToast('当前演示仅包含本地题库')">最近使用</button></div><div class="sort-select">最近更新 <span>⌄</span></div></div>
+          <div v-if="banks.length" class="bank-grid">
+            <article v-for="(bank, index) in banks" :key="bank.id" class="bank-card-item">
+              <div class="bank-card-art" :class="`art-${index % 3}`"><span class="bank-art-label">{{ bank.format }}</span><span class="bank-art-mark">{{ index % 2 === 0 ? 'Q.' : '问' }}</span><span class="bank-art-line"></span><span class="bank-art-line short"></span><span class="bank-art-spark">✦</span></div>
+              <div class="bank-card-content"><div class="bank-card-title"><span class="document-icon bank-document"><svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20"/></svg></span><div><strong>{{ bank.name }}</strong><small>{{ bank.questions }} 道题 · {{ bank.format }}</small></div><button class="more-button" @click="deleteBank(bank)" title="删除题库">···</button></div><div class="bank-card-footer"><span>最近更新 {{ bank.updated }}</span><span class="ready-label"><i></i>已确认</span></div><button class="bank-practice-button" @click="useBankForPractice(bank)">用此题库开始练习 <span>→</span></button></div>
+            </article>
+            <button class="add-bank-card" @click="openBankPicker"><span>＋</span><strong>添加新题库</strong><small>上传资料，整理你的练习内容</small></button>
+          </div>
+          <div v-else class="empty-state library-empty"><span>▤</span><strong>还没有自定义题库</strong><p>上传自己的面试题目，开始一场专项练习。</p><button class="primary-button" @click="openBankPicker">上传题库</button></div>
+        </template>
+
+        <template v-else-if="page === 'resumes'">
+          <div class="page-intro"><div><span class="section-kicker">YOUR CAREER STORY</span><h1>我的简历</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" @click="openResumePicker">＋ 上传简历</button></div>
+          <div class="resume-private-note"><span>◇</span><p><strong>本地演示资料</strong> 不会上传或保留原始文件；当前只模拟简历解析，确认后把字段保存在本浏览器中，供交互演示使用。</p></div>
+          <div class="resume-layout"><section class="resume-list-column"><div class="library-toolbar resume-toolbar"><div class="library-tabs"><button class="active">全部简历 <span>{{ resumes.length }}</span></button></div><span class="sort-select">最近更新 <b>⌄</b></span></div>
+              <div v-if="resumes.length" class="resume-list"> <article v-for="resume in resumes" :key="resume.id" class="resume-card" :class="{ 'resume-default': resume.default }"><div class="resume-file-preview"><span class="pdf-ribbon">{{ resume.name.endsWith('.docx') ? 'DOC' : 'PDF' }}</span><div class="preview-monogram">林<br /><small>简历</small></div><i></i><i></i><i class="preview-short"></i><i></i></div><div class="resume-card-body"><div class="resume-title-row"><div><h3>{{ resume.name }}</h3><span class="resume-status"><i></i>信息已确认</span><span v-if="resume.default" class="default-tag">默认简历</span></div><button class="more-button" @click="deleteResume(resume)" title="删除简历">···</button></div><div class="resume-meta-line"><span>{{ resume.size }}</span><i>·</i><span>{{ resume.projects }} 段项目经历</span><i>·</i><span>{{ resume.updated }} 更新</span></div><div class="resume-skills"><span v-for="skill in (resume.skills || 'Java、Spring Boot、RAG').split('、').slice(0, 4)" :key="skill">{{ skill }}</span></div><div v-if="resume.project" class="resume-project"><small>项目摘要</small><p>{{ resume.project }}</p></div><div class="resume-card-actions"><button class="subtle-button" @click="showToast('演示资料字段已在上传确认时校验')">查看解析信息</button><button v-if="!resume.default" class="text-button" @click="setDefaultResume(resume)">设为默认简历</button><span v-else class="default-confirmed">✓ 默认使用</span></div></div></article></div>
+              <div v-else class="empty-state"><span>▤</span><strong>上传一份简历，开始你的第一场综合面试</strong><button class="primary-button" @click="openResumePicker">上传简历</button></div>
+            </section><aside class="resume-aside"><div class="panel resume-aside-card"><span class="section-kicker">A GOOD START</span><h3>让经历成为你的回答线索</h3><p>简历中的项目、技术选择和结果，会成为综合面试追问的起点。</p><div class="resume-aside-illustration"><span class="resume-paper"><i></i><i></i><i></i><b>✦</b></span><span class="resume-sun"></span></div><div class="aside-check"><span>✓</span> 上传后先检查解析结果</div><div class="aside-check"><span>✓</span> 修正错漏后再确认使用</div><div class="aside-check"><span>✓</span> 只在综合面试中关联简历</div></div></aside></div>
+        </template>
+      </div>
+    </main>
+
+    <input ref="resumeInput" class="visually-hidden" type="file" accept=".pdf,.doc,.docx" @change="onResumeSelected" />
+    <input ref="bankInput" class="visually-hidden" type="file" accept=".pdf,.doc,.docx,.txt,.md,.markdown" @change="onBankSelected" />
+
+    <div v-if="toast" class="toast-message"><span>✓</span>{{ toast }}</div>
+
+    <div v-if="reviewDialog && pendingReview" class="dialog-scrim" @click.self="reviewDialog = false">
+      <section class="review-dialog" role="dialog" aria-modal="true" :aria-label="pendingReview.type === 'resume' ? '确认简历解析结果' : '确认题库解析结果'">
+        <div class="dialog-top"><div><span class="section-kicker">REVIEW BEFORE USE</span><h2>{{ pendingReview.type === 'resume' ? '确认简历信息' : '确认题库问题' }}</h2><p>本地演示会展示模拟解析结果；确认后才可用于面试。</p></div><button class="dialog-close" @click="reviewDialog = false">×</button></div>
+        <template v-if="pendingReview.type === 'resume'">
+          <label class="field-label">文件名称</label><input v-model="pendingReview.name" class="text-field" />
+          <label class="field-label dialog-field-label">教育经历</label><input v-model="pendingReview.education" class="text-field" />
+          <label class="field-label dialog-field-label">技能关键词</label><textarea v-model="pendingReview.skills" class="text-field dialog-textarea"></textarea>
+          <label class="field-label dialog-field-label">项目摘要</label><textarea v-model="pendingReview.project" class="text-field dialog-textarea"></textarea>
+        </template>
+        <template v-else>
+          <label class="field-label">题库名称</label><input v-model="pendingReview.name" class="text-field" />
+          <div class="question-review-heading"><span class="field-label">解析出的题目</span><button class="text-button" @click="addQuestion">＋ 添加问题</button></div>
+          <div class="question-review-list"><div v-for="(question, index) in pendingReview.questions" :key="index" class="question-edit-row"><span>{{ String(index + 1).padStart(2, '0') }}</span><textarea v-model="pendingReview.questions[index]" class="text-field"></textarea><button @click="removeQuestion(index)" title="删除问题">×</button></div></div>
+        </template>
+        <div class="dialog-footnote"><span>◇</span> 当前为静态演示解析；不会上传或保存原始文件，只保存你确认后的模拟字段。</div>
+        <div class="dialog-actions"><button class="subtle-button" @click="reviewDialog = false">取消</button><button class="primary-button" @click="confirmReview">确认并保存 <span>→</span></button></div>
+      </section>
+    </div>
+  </div>
+</template>

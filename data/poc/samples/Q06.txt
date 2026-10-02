@@ -1,0 +1,5 @@
+Synthetic Question Bank Q06
+Source: synthetic benchmark fixture; no real personal data.
+Q1: How would you design resume ownership checks?
+Q2: What should be deleted with a resume?
+Q3: How do you keep secrets out of logs?

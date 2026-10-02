@@ -1,0 +1,5 @@
+Synthetic Question Bank Q10
+Source: synthetic benchmark fixture; no real personal data.
+Q1: Describe a production incident you investigated.
+Q2: What metric proved your fix worked?
+Q3: What would you improve in the next iteration?

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "Q01",
+  "file": "Q01.md",
+  "format": "md",
+  "mediaType": "text/markdown",
+  "category": "question_bank",
+  "complexityTags": [
+    "text"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "questions": [
+      "Explain the RAG retrieval pipeline.",
+      "How would you build an offline evaluation set?",
+      "How do you measure citation correctness?"
+    ]
+  },
+  "sha256": "2f4a66184bc3f580cca1d981ee84005b9d3727855eae109cf0f47e43dd14dcd8"
+}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "R05",
+  "file": "R05.pdf",
+  "format": "pdf",
+  "mediaType": "application/pdf",
+  "category": "resume",
+  "complexityTags": [
+    "scanned",
+    "ocr",
+    "image-only"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": true,
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R05",
+      "education": "Bachelor of Computer Engineering",
+      "skills": "Java, OCR, RAG",
+      "project": "Scanned Resume Parser",
+      "metric": "F1 0.91"
+    }
+  },
+  "sha256": "38b1f9bdf6cfe89492775f3e2218f4691312a4dfeaf22b97421dea18bbda418e"
+}

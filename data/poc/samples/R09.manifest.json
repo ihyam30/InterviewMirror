@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "R09",
+  "file": "R09.pdf",
+  "format": "pdf",
+  "mediaType": "application/pdf",
+  "category": "resume",
+  "complexityTags": [
+    "text",
+    "formula"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R09",
+      "education": "Bachelor of Software Engineering",
+      "skills": "Java, Spring Boot, SSE",
+      "project": "Streaming Answer UI",
+      "metric": "Retry rate 1.2%"
+    }
+  },
+  "sha256": "200d7dc94bd26ff9333465fb164d1d09a38fe16b19111328c7274f8e7aece05d"
+}

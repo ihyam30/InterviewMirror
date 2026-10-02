@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "R10",
+  "file": "R10.docx",
+  "format": "docx",
+  "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "category": "resume",
+  "complexityTags": [
+    "table",
+    "cross-page"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R10",
+      "education": "Bachelor of Computer Science",
+      "skills": "TypeScript, Java, Docker",
+      "project": "Local AI Demo",
+      "metric": "Startup 12 minutes"
+    }
+  },
+  "sha256": "d4e2b5a7fc1e1c72991f98dc3a9cacab4ae0e1492eae46ae5d29a821e51001c8"
+}

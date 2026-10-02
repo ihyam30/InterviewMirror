@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "Q07",
+  "file": "Q07.md",
+  "format": "md",
+  "mediaType": "text/markdown",
+  "category": "question_bank",
+  "complexityTags": [
+    "multi-page",
+    "cross-page"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "questions": [
+      "Compare polling with server-sent events.",
+      "How do you set a report generation timeout?",
+      "How would you test an early interview end?"
+    ]
+  },
+  "sha256": "3efb85ee291b6967369f47b9074ba7c6faafb093ba87f192b0bda5bf08788fd2"
+}

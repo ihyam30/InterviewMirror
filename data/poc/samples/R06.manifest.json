@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "R06",
+  "file": "R06.docx",
+  "format": "docx",
+  "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "category": "resume",
+  "complexityTags": [
+    "text",
+    "bullets"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R06",
+      "education": "Bachelor of Artificial Intelligence",
+      "skills": "Python, LangGraph, Spring AI",
+      "project": "Interview Report Agent",
+      "metric": "40 test cases"
+    }
+  },
+  "sha256": "43736f62d5ced8a6b413208d37a41a8c4ce10f617dc884fbdcc8953f9ae63d13"
+}

@@ -1,0 +1,9 @@
+node_modules/
+dist/
+scripts/poc/.mineru/
+scripts/poc/.tools/
+scripts/poc/.uv-cache/
+scripts/poc/.m2/
+data/poc/results/
+**/target/
+**/__pycache__/

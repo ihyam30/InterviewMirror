@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "J03",
+  "file": "J03.docx",
+  "format": "docx",
+  "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "category": "jd",
+  "complexityTags": [
+    "office",
+    "formula",
+    "cross-page",
+    "complex"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "requirements": [
+      "Track model usage and per-session cost.",
+      "Keep monthly model budget below CNY 300.",
+      "Provide evidence-backed interview reports."
+    ]
+  },
+  "sha256": "967c7980a631a1f05644e37d9ff8ff8ea72121e310e209e626e4bea5b8ec3b74"
+}

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "R07",
+  "file": "R07.pdf",
+  "format": "pdf",
+  "mediaType": "application/pdf",
+  "category": "resume",
+  "complexityTags": [
+    "table",
+    "formula"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R07",
+      "education": "Bachelor of Computer Science",
+      "skills": "Java, Redis, Vue 3",
+      "project": "Model Gateway",
+      "metric": "P95 = 420 ms"
+    }
+  },
+  "sha256": "4e9f488cbc61714f44aadba51c0fa38ed0c0cfd8c1f39da4ef88d1d64b66aaab"
+}

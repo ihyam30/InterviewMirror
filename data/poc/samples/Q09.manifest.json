@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "Q09",
+  "file": "Q09.md",
+  "format": "md",
+  "mediaType": "text/markdown",
+  "category": "question_bank",
+  "complexityTags": [
+    "table",
+    "multi-page",
+    "complex"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "questions": [
+      "How do you prioritize a product gap?",
+      "What makes evidence trustworthy?",
+      "How do you mark an unassessed skill?"
+    ]
+  },
+  "sha256": "3c61bc1a17ced00c73c0a72e0cda5fea77428c003105b06c90c67af03b19d9da"
+}

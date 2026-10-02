@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interviewmirror.local/schemas/model-run.v1.1.schema.json",
+  "title": "InterviewMirror Spring AI model run v1.1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "createdAt", "provider", "modelId", "datasetVersion", "promptVersion",
+    "datasetSha256", "gitHead", "gitDirty", "evaluationCases", "totalStructuredAttempts",
+    "structuredSuccesses", "semanticSuccesses", "reportP95Ms", "inputTokens", "outputTokens",
+    "inputPriceCnyPerMillion", "outputPriceCnyPerMillion", "measuredCostCny", "humanQualityMean", "calls"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "interviewmirror.spring-ai-run.v1.1.0" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "provider": { "type": "string", "minLength": 1 },
+    "modelId": { "type": "string", "minLength": 1 },
+    "datasetVersion": { "type": "string", "minLength": 1 },
+    "promptVersion": { "type": "string", "minLength": 1 },
+    "datasetSha256": { "$ref": "#/$defs/sha256" },
+    "gitHead": { "type": "string" },
+    "gitDirty": { "type": "boolean" },
+    "evaluationCases": { "type": "integer", "minimum": 0 },
+    "totalStructuredAttempts": { "type": "integer", "minimum": 0 },
+    "structuredSuccesses": { "type": "integer", "minimum": 0 },
+    "semanticSuccesses": { "type": "integer", "minimum": 0 },
+    "reportP95Ms": { "type": "integer", "minimum": 0 },
+    "inputTokens": { "type": "integer", "minimum": 0 },
+    "outputTokens": { "type": "integer", "minimum": 0 },
+    "inputPriceCnyPerMillion": { "type": "number", "minimum": 0 },
+    "outputPriceCnyPerMillion": { "type": "number", "minimum": 0 },
+    "measuredCostCny": { "type": "number", "minimum": 0 },
+    "humanQualityMean": { "type": ["number", "null"], "minimum": 1, "maximum": 5 },
+    "calls": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/callResult" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "callResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "caseId", "kind", "structured", "semanticValid", "validationErrors", "elapsedMs",
+        "inputTokens", "outputTokens", "structuredOutput", "error"
+      ],
+      "properties": {
+        "caseId": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["EVALUATION", "REPORT"] },
+        "structured": { "type": "boolean" },
+        "semanticValid": { "type": "boolean" },
+        "validationErrors": { "type": "array", "items": { "type": "string" } },
+        "elapsedMs": { "type": "integer", "minimum": 0 },
+        "inputTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "outputTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "structuredOutput": {
+          "oneOf": [
+            { "$ref": "#/$defs/evaluationWire" },
+            { "$ref": "#/$defs/reportDraft" },
+            { "type": "null" }
+          ]
+        },
+        "error": { "type": ["string", "null"] }
+      }
+    },
+    "evaluationWire": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "score", "rationale", "evidence", "followUpRequired", "followUpQuestion"],
+      "properties": {
+        "status": { "enum": ["ASSESSED", "UNASSESSED", "NOT_APPLICABLE"] },
+        "score": { "enum": ["1", "2", "3", "4", "5", "UNASSESSED", "NOT_APPLICABLE"] },
+        "rationale": { "type": "string" },
+        "evidence": { "type": "array", "items": { "type": "string" } },
+        "followUpRequired": { "type": "boolean" },
+        "followUpQuestion": { "type": "string" }
+      }
+    },
+    "reportDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["overallReview", "strengths", "risks", "recommendations", "learningPath", "evidence"],
+      "properties": {
+        "overallReview": { "type": "string" },
+        "strengths": { "type": "array", "items": { "type": "string" } },
+        "risks": { "type": "array", "items": { "type": "string" } },
+        "recommendations": { "type": "array", "items": { "type": "string" } },
+        "learningPath": { "type": "array", "items": { "type": "string" } },
+        "evidence": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

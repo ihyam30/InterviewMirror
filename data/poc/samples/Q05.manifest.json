@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "Q05",
+  "file": "Q05.pdf",
+  "format": "pdf",
+  "mediaType": "application/pdf",
+  "category": "question_bank",
+  "complexityTags": [
+    "two-column",
+    "table",
+    "complex"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "questions": [
+      "Explain SSE reconnect behavior.",
+      "How do you persist partial model output?",
+      "What belongs in a trace identifier?"
+    ]
+  },
+  "sha256": "6fc17e36ed2196b9d0081f60434a115262e6b3a45b951e42c784742aa148d96b"
+}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "J04",
+  "file": "J04.pdf",
+  "format": "pdf",
+  "mediaType": "application/pdf",
+  "category": "jd",
+  "complexityTags": [
+    "scanned",
+    "ocr",
+    "image-only"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": true,
+  "groundTruth": {
+    "requirements": [
+      "Implement document parsing and citation locators.",
+      "Evaluate scanned PDF OCR quality.",
+      "Collaborate through written design reviews."
+    ]
+  },
+  "sha256": "4ce19d871bb87855f2deec86760d023231cddabe761cd525584edd7038c7607d"
+}

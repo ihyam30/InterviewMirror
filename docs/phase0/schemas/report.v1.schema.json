@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interviewmirror.local/schemas/report.v1.schema.json",
+  "title": "InterviewMirror report v1",
+  "type": "object",
+  "required": ["schemaVersion", "reportId", "interviewId", "ownerId", "mode", "status", "createdAt", "completedAt", "sourceSnapshot", "summary", "scores", "turns", "strengths", "risks", "recommendations", "learningPath", "gapAnalysis", "nextActions", "generationMeta"],
+  "properties": {
+    "schemaVersion": {"const": "1.0.0"},
+    "reportId": {"type": "string", "minLength": 1},
+    "interviewId": {"type": "string", "minLength": 1},
+    "ownerId": {"type": "string", "minLength": 1},
+    "mode": {"enum": ["COMPREHENSIVE", "QUESTION_BANK"]},
+    "status": {"enum": ["READY", "PARTIAL", "REPORT_RETRYABLE"]},
+    "createdAt": {"type": "string", "format": "date-time"},
+    "completedAt": {"type": "string", "format": "date-time"},
+    "sourceSnapshot": {"type": "object", "required": ["resumeSnapshotId", "questionBankSnapshotId", "jdSnapshotId"], "properties": {"resumeSnapshotId": {"type": ["string", "null"]}, "questionBankSnapshotId": {"type": ["string", "null"]}, "jdSnapshotId": {"type": ["string", "null"]}}, "additionalProperties": false},
+    "summary": {"type": "object", "required": ["overallScore", "overallReview", "oneLineConclusion"], "properties": {"overallScore": {"type": "integer", "minimum": 0, "maximum": 100}, "overallReview": {"type": "string", "minLength": 1}, "oneLineConclusion": {"type": "string"}, "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}}, "additionalProperties": false},
+    "scores": {"type": "object", "required": ["TECHNICAL_DEPTH", "PROJECT_EXPERIENCE", "JOB_MATCH", "COMMUNICATION", "LOGICAL_STRUCTURE", "PROBLEM_SOLVING", "CULTURE_MATCH"], "properties": {"TECHNICAL_DEPTH": {"$ref": "#/$defs/dimension"}, "PROJECT_EXPERIENCE": {"$ref": "#/$defs/dimension"}, "JOB_MATCH": {"$ref": "#/$defs/dimension"}, "COMMUNICATION": {"$ref": "#/$defs/dimension"}, "LOGICAL_STRUCTURE": {"$ref": "#/$defs/dimension"}, "PROBLEM_SOLVING": {"$ref": "#/$defs/dimension"}, "CULTURE_MATCH": {"$ref": "#/$defs/dimension"}}, "additionalProperties": false},
+    "turns": {"type": "array", "items": {"type": "object", "required": ["turnId", "questionId", "kind", "question", "answer", "feedback", "evidence"], "properties": {"turnId": {"type": "string"}, "questionId": {"type": "string"}, "parentTurnId": {"type": ["string", "null"]}, "kind": {"enum": ["MAIN", "FOLLOW_UP"]}, "question": {"type": "string", "minLength": 1}, "answer": {"type": "string"}, "feedback": {"type": "string"}, "dimensionScores": {"type": "object"}, "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}}, "additionalProperties": false}},
+    "strengths": {"type": "array", "items": {"$ref": "#/$defs/insight"}},
+    "risks": {"type": "array", "items": {"$ref": "#/$defs/insight"}},
+    "recommendations": {"type": "array", "items": {"type": "object", "required": ["action", "why", "evidence"], "properties": {"action": {"type": "string"}, "why": {"type": "string"}, "relatedGapId": {"type": ["string", "null"]}, "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}}, "additionalProperties": false}},
+    "learningPath": {"type": "array", "items": {"type": "object", "required": ["order", "objective", "activities"], "properties": {"order": {"type": "integer", "minimum": 1}, "objective": {"type": "string"}, "activities": {"type": "array", "items": {"type": "string"}}, "relatedGapId": {"type": ["string", "null"]}}, "additionalProperties": false}},
+    "gapAnalysis": {"type": "object", "required": ["status", "notApplicableReason", "summary"], "properties": {"status": {"enum": ["GENERATED", "NOT_APPLICABLE"]}, "notApplicableReason": {"enum": ["NO_JD", "QUESTION_BANK_MODE", null]}, "gapAnalysisId": {"type": ["string", "null"]}, "summary": {"$ref": "#/$defs/gapSummary"}}, "additionalProperties": false},
+    "nextActions": {"type": "array", "items": {"enum": ["RESTART", "EXPORT_PDF", "HOME"]}, "minItems": 3, "uniqueItems": true},
+    "generationMeta": {"type": "object", "required": ["modelId", "promptVersion", "schemaVersion", "inputTokens", "outputTokens", "elapsedMs", "costCny"], "properties": {"modelId": {"type": "string"}, "promptVersion": {"type": "string"}, "schemaVersion": {"type": "string"}, "inputTokens": {"type": "integer", "minimum": 0}, "outputTokens": {"type": "integer", "minimum": 0}, "elapsedMs": {"type": "number", "minimum": 0}, "costCny": {"type": "number", "minimum": 0}}, "additionalProperties": false}
+  },
+  "$defs": {
+    "evidence": {"type": "object", "required": ["sourceType", "sourceId", "quote"], "properties": {"sourceType": {"enum": ["JD", "RESUME", "TURN"]}, "sourceId": {"type": "string"}, "snapshotId": {"type": ["string", "null"]}, "page": {"type": ["integer", "null"], "minimum": 1}, "turnId": {"type": ["string", "null"]}, "quote": {"type": "string", "minLength": 1, "maxLength": 500}, "sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"}}, "additionalProperties": false},
+    "dimension": {"type": "object", "required": ["status", "value", "rationale", "evidence"], "properties": {"status": {"enum": ["ASSESSED", "UNASSESSED", "NOT_APPLICABLE"]}, "value": {"type": ["integer", "null"], "minimum": 1, "maximum": 5}, "rationale": {"type": "string"}, "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}}, "additionalProperties": false},
+    "insight": {"type": "object", "required": ["text", "evidence"], "properties": {"text": {"type": "string", "minLength": 1}, "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}}, "additionalProperties": false},
+    "gapSummary": {"type": ["object", "null"], "required": ["matchScore", "evaluatedRequirements", "totalRequirements", "topGaps", "radar", "oneLineConclusion", "fullAnalysisPath"], "properties": {"matchScore": {"type": ["integer", "null"], "minimum": 0, "maximum": 100}, "evaluatedRequirements": {"type": "integer", "minimum": 0}, "totalRequirements": {"type": "integer", "minimum": 0}, "topGaps": {"type": "array", "maxItems": 3, "items": {"type": "object", "required": ["gapId", "title", "priority"], "properties": {"gapId": {"type": "string"}, "title": {"type": "string"}, "priority": {"enum": ["HIGH", "MEDIUM", "LOW"]}}, "additionalProperties": false}}, "radar": {"type": "array", "items": {"type": "object", "required": ["axis", "jdRequirement", "resumeEvidence", "interviewPerformance"], "properties": {"axis": {"enum": ["SKILLS", "PROJECT_EXPERIENCE", "PROBLEM_SOLVING", "ROLE_RESPONSIBILITIES"]}, "jdRequirement": {"type": ["number", "null"], "minimum": 0, "maximum": 5}, "resumeEvidence": {"type": ["number", "null"], "minimum": 0, "maximum": 5}, "interviewPerformance": {"type": ["number", "null"], "minimum": 0, "maximum": 5}}, "additionalProperties": false}}, "oneLineConclusion": {"type": "string"}, "fullAnalysisPath": {"type": "string"}}, "additionalProperties": false}
+  },
+  "additionalProperties": false
+}

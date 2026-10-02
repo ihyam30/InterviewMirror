@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "Q10",
+  "file": "Q10.txt",
+  "format": "txt",
+  "mediaType": "text/plain",
+  "category": "question_bank",
+  "complexityTags": [
+    "text",
+    "bullets"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "questions": [
+      "Describe a production incident you investigated.",
+      "What metric proved your fix worked?",
+      "What would you improve in the next iteration?"
+    ]
+  },
+  "sha256": "af7d73d13dd90cc6a090b1dc1d6bae66690f6e7d0c884f92b7f79970100ef55c"
+}

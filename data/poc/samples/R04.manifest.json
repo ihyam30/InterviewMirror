@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "R04",
+  "file": "R04.docx",
+  "format": "docx",
+  "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "category": "resume",
+  "complexityTags": [
+    "table",
+    "multi-column"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R04",
+      "education": "Bachelor of Information Systems",
+      "skills": "Java, Spring Boot, PostgreSQL",
+      "project": "Campus Knowledge Assistant",
+      "metric": "1,200 documents"
+    }
+  },
+  "sha256": "474af5bb74b222bf27efb2c5fff1d745e1973b87878d58b2209670d06192ec68"
+}

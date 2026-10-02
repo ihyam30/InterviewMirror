@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "J02",
+  "file": "J02.pdf",
+  "format": "pdf",
+  "mediaType": "application/pdf",
+  "category": "jd",
+  "complexityTags": [
+    "office",
+    "two-column",
+    "formula",
+    "complex"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "requirements": [
+      "Deliver Vue and Java features end to end.",
+      "Stream model output with SSE and preserve session state.",
+      "Keep API p95 below 800 ms for non-model endpoints."
+    ]
+  },
+  "sha256": "d6168e765dc1b1bbbdec0cb68574bfdb6471c6a7fd31015158a3db825db02c1e"
+}

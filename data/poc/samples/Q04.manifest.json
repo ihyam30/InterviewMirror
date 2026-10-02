@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "Q04",
+  "file": "Q04.docx",
+  "format": "docx",
+  "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "category": "question_bank",
+  "complexityTags": [
+    "office",
+    "table"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "questions": [
+      "Design a resilient model API client.",
+      "How should retries use exponential backoff?",
+      "How do you prevent duplicate report creation?"
+    ]
+  },
+  "sha256": "fc3f6177d9bcef553b0ed6e1fbc253b160d0b27fb4fbd4bf80170ff5dbc00579"
+}

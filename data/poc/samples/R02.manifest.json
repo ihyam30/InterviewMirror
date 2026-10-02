@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "interviewmirror-samples.v1.1.0",
+  "sampleId": "R02",
+  "file": "R02.docx",
+  "format": "docx",
+  "mediaType": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "category": "resume",
+  "complexityTags": [
+    "text",
+    "table"
+  ],
+  "source": "synthetic; generated locally by scripts/poc/generate_samples.py",
+  "scanned": false,
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R02",
+      "education": "Bachelor of Software Engineering",
+      "skills": "Java, Vue 3, REST API",
+      "project": "AI Interview Practice",
+      "metric": "P95 1.8 seconds"
+    }
+  },
+  "sha256": "d48e8af2032108b7305a8eb8f2578b2d475b095db062b7eb0c171192eabbd3e8"
+}

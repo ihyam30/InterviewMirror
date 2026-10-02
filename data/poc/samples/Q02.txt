@@ -1,0 +1,5 @@
+Synthetic Question Bank Q02
+Source: synthetic benchmark fixture; no real personal data.
+Q1: Describe a project you owned end to end.
+Q2: How did you choose the database schema?
+Q3: What trade-off did you make under a deadline?

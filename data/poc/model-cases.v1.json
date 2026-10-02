@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.model-benchmark.v1.0.0",
+  "promptVersion": "interview-evaluation.v1.0.0",
+  "cases": [
+    {"id":"M01","mode":"COMPREHENSIVE","dimension":"TECHNICAL_DEPTH","question":"解释向量召回后为什么可能仍要重排。","answer":"向量召回优先找语义相近片段，但主题相关不代表能回答当前问题。重排会结合问题和候选片段重新估计相关性；我会用固定问题集比较重排前后的 Recall@5 和引用正确率。","expectedSignals":["区分语义相关与可回答性","提出可验证指标"],"shouldAssess":true},
+    {"id":"M02","mode":"COMPREHENSIVE","dimension":"PROBLEM_SOLVING","question":"模型 API 间歇性超时，你会怎么处理？","answer":"我先查看超时比例、请求耗时分位数和供应商状态，再用 trace id 对比失败请求。客户端加有上限的指数退避；超过预算或仍失败时展示可重试状态，不重复创建报告。","expectedSignals":["先观测再定位","有限重试与幂等"],"shouldAssess":true},
+    {"id":"M03","mode":"COMPREHENSIVE","dimension":"PROJECT_EXPERIENCE","question":"介绍你负责过的检索项目和可验证结果。","answer":"我负责文档切分、向量召回和重排。我们用 120 条固定问题做评估，Recall@5 从 0.71 提升到 0.84；我没有负责前端，也没有线上用户量数据。","expectedSignals":["区分个人贡献与团队范围","指标口径有边界"],"shouldAssess":true},
+    {"id":"M04","mode":"COMPREHENSIVE","dimension":"LOGICAL_STRUCTURE","question":"如何判断一次检索优化是否有效？","answer":"先固定问题集和相关文档标注，再在相同数据上跑基线与新版本，比较 Recall@5、引用命中率和 p95 延迟。若离线提升但延迟超预算，就不直接上线，继续做分层召回实验。","expectedSignals":["对照实验","质量与延迟权衡"],"shouldAssess":true},
+    {"id":"M05","mode":"QUESTION_BANK","dimension":"TECHNICAL_DEPTH","question":"SSE 断线后如何恢复生成进度？","answer":"服务端为每次生成持久化事件序号和部分状态，客户端带 Last-Event-ID 重连；如果事件已过期，返回快照后再继续接收事件。","expectedSignals":["事件序号","快照或恢复路径"],"shouldAssess":true},
+    {"id":"M06","mode":"COMPREHENSIVE","dimension":"CULTURE_MATCH","question":"JD 要求异步协作。你如何让团队了解方案变更？","answer":"我会在 PR 和设计记录里写清背景、取舍、风险和需要回复的时间点；如果阻塞临近截止时间，会同步负责人并说明影响。","expectedSignals":["只评估JD明确的异步协作行为"],"shouldAssess":true},
+    {"id":"M07","mode":"COMPREHENSIVE","dimension":"UNASSESSED","question":"你有哪些部署 Kubernetes 的生产经验？","answer":"我没有做过 Kubernetes 生产部署。课程里用 Docker Compose 在本机启动过 PostgreSQL 和服务。","expectedSignals":["不得把无经验扩写为熟练","明确范围"],"shouldAssess":true},
+    {"id":"M08","mode":"QUESTION_BANK","dimension":"PROBLEM_SOLVING","question":"你如何设计模型调用的费用上限？","answer":"不知道，应该加限制吧。","expectedSignals":["低分且证据只能引用回答原文","追问可澄清"],"shouldAssess":true},
+    {"id":"M09","mode":"COMPREHENSIVE","dimension":"JOB_MATCH","question":"JD 要求维护离线评测集，你做过什么？","answer":"我为 RAG 项目整理了 120 条问题和相关文档标注，按周比较 Recall@5 和引用正确率。我没有做线上 A/B 实验。","expectedSignals":["部分匹配","不把离线评估说成线上实验"],"shouldAssess":true},
+    {"id":"M10","mode":"COMPREHENSIVE","dimension":"COMMUNICATION","question":"用两分钟概括你的项目、贡献和结果。","answer":"我做的是校内知识问答。我的工作是切分文档、实现召回和接入重排。120 条测试问题的 Recall@5 从 0.71 提高到 0.84，下一步要补充引用正确率和延迟评估。","expectedSignals":["回答直接、有结果和下一步"],"shouldAssess":true}
+  ]
+}
