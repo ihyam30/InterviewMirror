@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { currentUser as fetchCurrentUser, createResource, deleteFile, deleteResource, downloadFile, listResources, login as apiLogin, logout as apiLogout, updateResource, uploadFile } from './api.js'
-import { cancelPendingReview as cancelPendingReviewFlow } from './pending-review.js'
+import { currentUser as fetchCurrentUser, confirmDocument, createDocument, createQuestionBank, deleteDocument, downloadFile, getDocument, listDocuments, login as apiLogin, logout as apiLogout, retryDocument, updateDocument, validateInterviewSource } from './api.js'
+import { canReviewDocument, canRetryDocument, documentStatusLabel } from './document-state.js'
+import { buildResumeContent, projectRowsForReview, textLines } from './document-content.js'
 
 const navItems = [
   { id: 'home', label: '工作台', icon: 'home' },
@@ -90,6 +91,7 @@ const resumeInput = ref(null)
 const bankInput = ref(null)
 const startedAt = ref(null)
 let toastTimer
+const parseTimers = new Map()
 const authReady = ref(false)
 const currentUserInfo = ref(null)
 const loginForm = ref({ identifier: 'demo1', password: '' })
@@ -117,14 +119,27 @@ const interviewScript = [
 const activeScript = ref(interviewScript)
 
 function remoteItem(resource) {
-  let detail = {}
-  try { detail = JSON.parse(resource.content || '{}') } catch { detail = {} }
-  return { ...detail, id: resource.id, resourceId: resource.id, fileId: resource.fileId, name: resource.title, updated: '本地保存', ready: true }
+  const content = resource.content || {}
+  const questions = Array.isArray(content.questions) ? content.questions : []
+  const projects = Array.isArray(content.projects) ? content.projects : []
+  const education = Array.isArray(content.education) ? content.education : []
+  const skills = Array.isArray(content.skills) ? content.skills : []
+  const extension = resource.originalFilename?.split('.').pop()?.toUpperCase() || '自建'
+  return {
+    ...resource, content, id: resource.id, resourceId: resource.id, fileId: resource.fileId,
+    name: resource.title, fileName: resource.originalFilename, format: extension,
+    size: resource.sizeBytes ? formatSize(resource.sizeBytes) : '手动创建',
+    updated: new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(new Date(resource.updatedAt)),
+    ready: resource.usableForInterview === true, statusLabel: documentStatusLabel(resource.status),
+    questions: questions.length, questionItems: questions,
+    skills: skills.join('、'), project: projects.map((item) => item.name || item.description || '').filter(Boolean).join('；'),
+    projects: projects.length, educationText: education.map((item) => item.details || item.institution || '').filter(Boolean).join('；'),
+  }
 }
 
 async function loadOwnedResources() {
-  const [resumeRows, bankRows] = await Promise.all([listResources('RESUME'), listResources('QUESTION_BANK')])
-  resumes.value = resumeRows.map(remoteItem).map((item, index) => ({ ...item, default: item.default ?? index === 0 }))
+  const [resumeRows, bankRows] = await Promise.all([listDocuments('RESUME'), listDocuments('QUESTION_BANK')])
+  resumes.value = resumeRows.map(remoteItem)
   banks.value = bankRows.map(remoteItem)
   selectedResumeId.value = resumes.value.find((item) => item.default)?.id ?? resumes.value[0]?.id ?? ''
   selectedBankId.value = banks.value[0]?.id ?? ''
@@ -171,6 +186,7 @@ function handleExpiredSession() {
 
 window.addEventListener('interviewmirror-auth-expired', handleExpiredSession)
 onUnmounted(() => window.removeEventListener('interviewmirror-auth-expired', handleExpiredSession))
+onUnmounted(() => parseTimers.forEach((timer) => clearTimeout(timer)))
 
 const pageHeading = computed(() => ({
   home: ['工作台', '为下一场面试，先练一次。'],
@@ -221,25 +237,30 @@ function selectMode(nextMode) {
   mode.value = nextMode
 }
 
-function beginInterview() {
+async function beginInterview() {
   if (mode.value === 'COMPREHENSIVE') {
     const resume = resumes.value.find((item) => item.id === selectedResumeId.value && item.ready)
     if (!resume) return showToast('请先选择一份已确认的简历')
     if (jdText.value.trim().length > 1500) return showToast('JD 请控制在 1500 字以内')
+    try { await validateInterviewSource('RESUME', resume.id) } catch (error) { return showToast(error.message) }
     reportTitleDraft.value = jdText.value.trim().slice(0, 26) || 'AI 应用 / AI 全栈实习'
   } else {
     const bank = banks.value.find((item) => item.id === selectedBankId.value && item.ready)
     if (!bank) return showToast('请先选择一份已确认的题库')
+    try { await validateInterviewSource('QUESTION_BANK', bank.id) } catch (error) { return showToast(error.message) }
     reportTitleDraft.value = bank.name
     const questions = bank.questionItems?.length ? bank.questionItems : [
       '请介绍一个你最有代表性的项目，以及你负责的部分。',
       '你在项目中遇到的最大技术挑战是什么？',
       '如果重新实现这个项目，你会优先改进什么？',
     ]
-    activeScript.value = questions.map((question) => ({
-      question,
-      followup: `关于“${question.slice(0, 18)}”，能结合一次具体经历说明你的判断和结果吗？`,
-    }))
+    activeScript.value = questions.map((question) => {
+      const stem = typeof question === 'string' ? question : question.stem
+      return {
+        question: stem,
+        followup: `关于“${stem.slice(0, 18)}”，能结合一次具体经历说明你的判断和结果吗？`,
+      }
+    })
   }
 
   if (mode.value === 'COMPREHENSIVE') activeScript.value = interviewScript
@@ -333,12 +354,12 @@ async function onResumeSelected(event) {
   if (!file) return
   if (file.size > 20 * 1024 * 1024) return showToast('文件不能超过 20MB')
   try {
-    const stored = await uploadFile(file)
-    pendingReview.value = {
-      type: 'resume', name: stored.originalFilename, size: formatSize(stored.sizeBytes), fileId: stored.id,
-      education: '', skills: '', project: '',
-    }
-    reviewDialog.value = true
+    const document = await createDocument('RESUME', file)
+    resumes.value.unshift(remoteItem(document))
+    selectedResumeId.value = document.id
+    page.value = 'resumes'
+    showToast('简历已上传，正在排队解析')
+    pollDocument('RESUME', document.id)
   } catch (error) { showToast(error.message) }
 }
 
@@ -352,91 +373,157 @@ async function onBankSelected(event) {
   if (!file) return
   if (file.size > 20 * 1024 * 1024) return showToast('文件不能超过 20MB')
   try {
-    const stored = await uploadFile(file)
-    const extension = file.name.split('.').pop()?.toUpperCase() || '文档'
-    pendingReview.value = {
-      type: 'bank', name: file.name.replace(/\.[^.]+$/, ''), fileName: file.name, fileId: stored.id,
-      size: formatSize(stored.sizeBytes), questions: [], format: extension,
-    }
-    reviewDialog.value = true
+    const document = await createDocument('QUESTION_BANK', file)
+    banks.value.unshift(remoteItem(document))
+    selectedBankId.value = document.id
+    page.value = 'banks'
+    showToast('题库已上传，正在排队解析')
+    pollDocument('QUESTION_BANK', document.id)
   } catch (error) { showToast(error.message) }
 }
 
-function createBlankBank() {
+function replaceDocument(type, document) {
+  const collection = type === 'RESUME' ? resumes : banks
+  const mapped = remoteItem(document)
+  const index = collection.value.findIndex((item) => item.id === document.id)
+  if (index < 0) collection.value.unshift(mapped)
+  else collection.value.splice(index, 1, mapped)
+}
+
+function pollDocument(type, id) {
+  if (parseTimers.has(id)) return
+  const poll = async () => {
+    try {
+      const document = await getDocument(type, id)
+      replaceDocument(type, document)
+      if (['PENDING', 'PROCESSING'].includes(document.status)) {
+        parseTimers.set(id, setTimeout(poll, 1800))
+        return
+      }
+      parseTimers.delete(id)
+      if (document.status === 'PARSED') {
+        showToast('解析完成，请检查并确认资料')
+        openDocumentReview(type, document)
+      } else if (document.status === 'FAILED') {
+        showToast(document.parseTask?.errorMessage || '解析失败，可重试或手动编辑')
+      }
+    } catch (error) {
+      parseTimers.delete(id)
+      showToast(error.message)
+    }
+  }
+  parseTimers.set(id, setTimeout(poll, 1200))
+}
+
+function openDocumentReview(type, document) {
+  if (!canReviewDocument(document)) return showToast(documentStatusLabel(document.status))
+  const documentMode = type === 'RESUME' || type === 'resume' ? 'resume' : 'bank'
+  const content = structuredClone(document.content || {})
+  const info = content.personalInfo || {}
   pendingReview.value = {
-    type: 'bank', name: '我的新题库', fileName: '手动创建', size: '—', format: '自建',
-    questions: ['请介绍一个最有代表性的项目。', '你在项目中遇到的最大挑战是什么？'],
+    id: document.id, type: documentMode, name: document.title, fileId: document.fileId,
+    contentVersion: document.contentVersion, content,
+    personalInfo: { name: info.name || '', email: info.email || '', phone: info.phone || '', location: info.location || '' },
+    educationText: textLines(content.education), experienceText: textLines(content.experiences),
+    projects: projectRowsForReview(content.projects),
+    skillsText: textLines(content.skills),
+    awardsText: textLines(content.awards), metricsText: textLines(content.metrics),
+    questions: Array.isArray(content.questions) ? content.questions.map((item, index) => ({
+      position: index + 1, stem: item.stem || '', answer: item.answer || '', category: item.category || '',
+    })) : [],
   }
   reviewDialog.value = true
 }
 
+async function openDocument(type, document) {
+  try {
+    const detail = await getDocument(type, document.id)
+    replaceDocument(type, detail)
+    openDocumentReview(type, detail)
+  } catch (error) { showToast(error.message) }
+}
+
+async function createBlankBank() {
+  try {
+    const document = await createQuestionBank('我的新题库')
+    banks.value.unshift(remoteItem(document))
+    selectedBankId.value = document.id
+    openDocumentReview('QUESTION_BANK', document)
+  } catch (error) { showToast(error.message) }
+}
+
+async function retryParsing(type, document) {
+  try {
+    const restarted = await retryDocument(type, document.id)
+    replaceDocument(type, restarted)
+    showToast('已重新排队解析')
+    pollDocument(type, document.id)
+  } catch (error) { showToast(error.message) }
+}
+
 function addQuestion() {
-  pendingReview.value?.questions.push('请输入一道新问题')
+  pendingReview.value?.questions.push({ position: pendingReview.value.questions.length + 1, stem: '', answer: '', category: '' })
 }
 
 function removeQuestion(index) {
   pendingReview.value?.questions.splice(index, 1)
 }
 
-function confirmReview() {
-  if (!pendingReview.value) return
-  if (pendingReview.value.type === 'resume') {
-    const item = {
-      id: '', name: pendingReview.value.name, updated: '刚刚', ready: true,
-      default: resumes.value.length === 0, size: pendingReview.value.size, projects: 1,
-      education: pendingReview.value.education, skills: pendingReview.value.skills, project: pendingReview.value.project,
-      fileId: pendingReview.value.fileId,
-    }
-    saveReviewedResource('RESUME', item, () => {
-      resumes.value.unshift(item)
-      selectedResumeId.value = item.id
-      page.value = 'resumes'
-      showToast('简历确认信息已保存到本地后端')
-    })
-  } else {
-    const questions = pendingReview.value.questions.map((item) => item.trim()).filter(Boolean)
-    if (!questions.length) return showToast('题库至少需要保留一道问题')
-    const item = {
-      id: '', name: pendingReview.value.name || '未命名题库', updated: '刚刚',
-      ready: true, questions: questions.length, format: pendingReview.value.format,
-      questionItems: questions, fileId: pendingReview.value.fileId ?? null,
-    }
-    saveReviewedResource('QUESTION_BANK', item, () => {
-      banks.value.unshift(item)
-      selectedBankId.value = item.id
-      page.value = 'banks'
-      showToast(`已确认 ${questions.length} 道题目并保存到本地后端`)
-    })
-  }
+function addProject() {
+  pendingReview.value?.projects.push({ original: {}, name: '', technologiesText: '', outcomesText: '' })
 }
 
-async function saveReviewedResource(resourceType, item, afterSave) {
+function removeProject(index) {
+  pendingReview.value?.projects.splice(index, 1)
+}
+
+function buildReviewedContent(draft) {
+  if (draft.type === 'bank') {
+    const questions = draft.questions.map((item, index) => ({
+      position: index + 1, stem: item.stem.trim(), answer: item.answer.trim(),
+      ...(item.category.trim() ? { category: item.category.trim() } : {}),
+    })).filter((item) => item.stem)
+    return { schemaVersion: 'interviewmirror.question-bank-content.v1', questions }
+  }
+  return buildResumeContent(draft.content, draft)
+}
+
+async function saveReviewedDocument(alsoConfirm = false) {
+  const draft = pendingReview.value
+  if (!draft) return
+  const type = draft.type === 'resume' ? 'RESUME' : 'QUESTION_BANK'
   try {
-    const saved = await createResource({ resourceType, title: item.name, content: JSON.stringify(item), fileId: item.fileId ?? null })
-    item.id = saved.id
-    item.resourceId = saved.id
-    pendingReview.value = null
-    reviewDialog.value = false
-    afterSave()
+    const saved = await updateDocument(type, draft.id, {
+      title: draft.name,
+      contentVersion: draft.contentVersion,
+      content: buildReviewedContent(draft),
+    })
+    let finalDocument = saved
+    if (alsoConfirm) finalDocument = await confirmDocument(type, draft.id)
+    replaceDocument(type, finalDocument)
+    if (alsoConfirm) {
+      pendingReview.value = null
+      reviewDialog.value = false
+      showToast('资料已确认，可用于面试')
+    } else {
+      openDocumentReview(type, saved)
+      showToast('修改已保存；请再次确认后用于面试')
+    }
   } catch (error) { showToast(error.message) }
 }
 
+async function confirmReview() {
+  await saveReviewedDocument(true)
+}
+
 async function cancelReview() {
-  try {
-    await cancelPendingReviewFlow(pendingReview.value, deleteFile, () => {
-      pendingReview.value = null
-      reviewDialog.value = false
-    })
-  } catch (error) {
-    const reason = error instanceof Error && error.message ? `（${error.message}）` : ''
-    showToast(`原文件删除失败，请重试取消${reason}`)
-  }
+  pendingReview.value = null
+  reviewDialog.value = false
 }
 
 async function removeOwnedResource(collection, resource) {
   try {
-    await deleteResource(resource.resourceId || resource.id)
-    if (resource.fileId) await deleteFile(resource.fileId)
+    await deleteDocument(collection === resumes ? 'RESUME' : 'QUESTION_BANK', resource.id)
     collection.value = collection.value.filter((item) => item.id !== resource.id)
     if (selectedResumeId.value === resource.id) selectedResumeId.value = resumes.value[0]?.id ?? ''
     if (selectedBankId.value === resource.id) selectedBankId.value = banks.value[0]?.id ?? ''
@@ -447,20 +534,8 @@ async function removeOwnedResource(collection, resource) {
 async function deleteResume(resume) { await removeOwnedResource(resumes, resume) }
 
 async function setDefaultResume(resume) {
-  const updated = []
-  try {
-    for (const item of resumes.value) {
-      const next = { ...item, default: item.id === resume.id }
-      await updateResource(item.resourceId || item.id, {
-        title: item.name,
-        content: JSON.stringify(next),
-        fileId: item.fileId ?? null,
-      })
-      updated.push(next)
-    }
-    resumes.value = updated
-    showToast('已设为默认简历')
-  } catch (error) { showToast(error.message) }
+  selectedResumeId.value = resume.id
+  showToast('已选择本次综合面试使用的简历')
 }
 
 async function deleteBank(bank) {
@@ -771,12 +846,12 @@ function resetDemo() {
 
         <template v-else-if="page === 'banks'">
           <div class="page-intro"><div><span class="section-kicker">YOUR QUESTION LIBRARY</span><h1>自定义题库</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" @click="openBankPicker">＋ 上传题库</button></div>
-          <div class="library-tip"><span>✦</span><p><strong>先确认题库内容，再开始练习。</strong>支持 PDF、DOCX、TXT 和 Markdown；原文件保存在当前账号的私有对象空间，题目目前需手动确认。</p><button @click="createBlankBank">手动创建</button></div>
+          <div class="library-tip"><span>✦</span><p><strong>先检查解析结果并确认题库。</strong>支持 PDF、DOCX、TXT 和 Markdown；解析通过本地 MinerU 异步完成，确认后才能作为专项面试资料。</p><button @click="createBlankBank">手动创建</button></div>
           <div class="library-toolbar"><div class="library-tabs"><button class="active">全部题库 <span>{{ banks.length }}</span></button><button @click="showToast('当前演示仅包含本地题库')">最近使用</button></div><div class="sort-select">最近更新 <span>⌄</span></div></div>
           <div v-if="banks.length" class="bank-grid">
             <article v-for="(bank, index) in banks" :key="bank.id" class="bank-card-item">
               <div class="bank-card-art" :class="`art-${index % 3}`"><span class="bank-art-label">{{ bank.format }}</span><span class="bank-art-mark">{{ index % 2 === 0 ? 'Q.' : '问' }}</span><span class="bank-art-line"></span><span class="bank-art-line short"></span><span class="bank-art-spark">✦</span></div>
-              <div class="bank-card-content"><div class="bank-card-title"><span class="document-icon bank-document"><svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20"/></svg></span><div><strong>{{ bank.name }}</strong><small>{{ bank.questions }} 道题 · {{ bank.format }}</small></div><button class="more-button" @click="deleteBank(bank)" title="删除题库">···</button></div><div class="bank-card-footer"><span>最近更新 {{ bank.updated }}</span><span class="ready-label"><i></i>已确认</span></div><button v-if="bank.fileId" class="text-button" @click="downloadOwnedFile(bank.fileId, bank.fileName || bank.name)">下载原文件</button><button class="bank-practice-button" @click="useBankForPractice(bank)">用此题库开始练习 <span>→</span></button></div>
+              <div class="bank-card-content"><div class="bank-card-title"><span class="document-icon bank-document"><svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20"/></svg></span><div><strong>{{ bank.name }}</strong><small>{{ bank.questions }} 道题 · {{ bank.format }}</small></div><button class="more-button" @click="deleteBank(bank)" title="删除题库">···</button></div><div class="bank-card-footer"><span>最近更新 {{ bank.updated }}</span><span class="document-status" :class="bank.status.toLowerCase()"><i></i>{{ bank.statusLabel }}</span></div><button v-if="bank.status === 'FAILED'" class="text-button" @click="retryParsing('QUESTION_BANK', bank)">重新解析</button><button v-if="bank.status === 'PARSED' || bank.status === 'CONFIRMED'" class="text-button" @click="openDocument('QUESTION_BANK', bank)">预览 / 编辑</button><button v-if="bank.fileId" class="text-button" @click="downloadOwnedFile(bank.fileId, bank.fileName || bank.name)">下载原文件</button><button class="bank-practice-button" :disabled="!bank.ready" @click="useBankForPractice(bank)">{{ bank.ready ? '用此题库开始练习' : '确认后开始练习' }} <span>→</span></button></div>
             </article>
             <button class="add-bank-card" @click="openBankPicker"><span>＋</span><strong>添加新题库</strong><small>上传资料，整理你的练习内容</small></button>
           </div>
@@ -785,9 +860,9 @@ function resetDemo() {
 
         <template v-else-if="page === 'resumes'">
           <div class="page-intro"><div><span class="section-kicker">YOUR CAREER STORY</span><h1>我的简历</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" @click="openResumePicker">＋ 上传简历</button></div>
-          <div class="resume-private-note"><span>◇</span><p><strong>本地私有资料</strong> 原始文件存于私有对象桶；本阶段尚未接入 MinerU 解析，字段由你在确认页补充并存入本地数据库。</p></div>
+          <div class="resume-private-note"><span>◇</span><p><strong>本地私有资料</strong> 原始文件保存在账号私有对象空间；MinerU 在本机异步提取结构化简历信息，只有确认后的版本才能用于综合面试。</p></div>
           <div class="resume-layout"><section class="resume-list-column"><div class="library-toolbar resume-toolbar"><div class="library-tabs"><button class="active">全部简历 <span>{{ resumes.length }}</span></button></div><span class="sort-select">最近更新 <b>⌄</b></span></div>
-              <div v-if="resumes.length" class="resume-list"> <article v-for="resume in resumes" :key="resume.id" class="resume-card" :class="{ 'resume-default': resume.default }"><div class="resume-file-preview"><span class="pdf-ribbon">{{ resume.name.endsWith('.docx') ? 'DOC' : 'PDF' }}</span><div class="preview-monogram">镜<br /><small>简历</small></div><i></i><i></i><i class="preview-short"></i><i></i></div><div class="resume-card-body"><div class="resume-title-row"><div><h3>{{ resume.name }}</h3><span class="resume-status"><i></i>信息已确认</span><span v-if="resume.default" class="default-tag">默认简历</span></div><button class="more-button" @click="deleteResume(resume)" title="删除简历">···</button></div><div class="resume-meta-line"><span>{{ resume.size }}</span><i>·</i><span>{{ resume.projects }} 段项目经历</span><i>·</i><span>{{ resume.updated }} 更新</span></div><div class="resume-skills"><span v-for="skill in (resume.skills || 'Java、Spring Boot、RAG').split('、').slice(0, 4)" :key="skill">{{ skill }}</span></div><div v-if="resume.project" class="resume-project"><small>项目摘要</small><p>{{ resume.project }}</p></div><div class="resume-card-actions"><button class="subtle-button" @click="showToast('字段由你在确认页填写；简历解析会在后续阶段接入')">查看资料字段</button><button v-if="resume.fileId" class="text-button" @click="downloadOwnedFile(resume.fileId, resume.name)">下载原文件</button><button v-if="!resume.default" class="text-button" @click="setDefaultResume(resume)">设为默认简历</button><span v-else class="default-confirmed">✓ 默认使用</span></div></div></article></div>
+              <div v-if="resumes.length" class="resume-list"> <article v-for="resume in resumes" :key="resume.id" class="resume-card" :class="{ 'resume-default': resume.id === selectedResumeId && resume.ready }"><div class="resume-file-preview"><span class="pdf-ribbon">{{ resume.format === 'DOCX' ? 'DOC' : resume.format }}</span><div class="preview-monogram">镜<br /><small>简历</small></div><i></i><i></i><i class="preview-short"></i><i></i></div><div class="resume-card-body"><div class="resume-title-row"><div><h3>{{ resume.name }}</h3><span class="document-status" :class="resume.status.toLowerCase()"><i></i>{{ resume.statusLabel }}</span><span v-if="resume.id === selectedResumeId && resume.ready" class="default-tag">本次已选</span></div><button class="more-button" @click="deleteResume(resume)" title="删除简历">···</button></div><div class="resume-meta-line"><span>{{ resume.size }}</span><i>·</i><span>{{ resume.projects }} 段项目经历</span><i>·</i><span>{{ resume.updated }} 更新</span></div><div class="resume-skills"><span v-for="skill in resume.skills.split('、').filter(Boolean).slice(0, 4)" :key="skill">{{ skill }}</span><small v-if="!resume.skills">尚未提取技能</small></div><div v-if="resume.project" class="resume-project"><small>项目摘要</small><p>{{ resume.project }}</p></div><div class="resume-card-actions"><button v-if="resume.status === 'PARSED' || resume.status === 'CONFIRMED'" class="subtle-button" @click="openDocument('RESUME', resume)">预览 / 编辑</button><button v-if="resume.status === 'FAILED'" class="subtle-button" @click="retryParsing('RESUME', resume)">重新解析</button><button v-if="resume.fileId" class="text-button" @click="downloadOwnedFile(resume.fileId, resume.fileName || resume.name)">下载原文件</button><button v-if="resume.ready" class="text-button" @click="setDefaultResume(resume)">选择用于面试</button></div></div></article></div>
               <div v-else class="empty-state"><span>▤</span><strong>上传一份简历，开始你的第一场综合面试</strong><button class="primary-button" @click="openResumePicker">上传简历</button></div>
             </section><aside class="resume-aside"><div class="panel resume-aside-card"><span class="section-kicker">A GOOD START</span><h3>让经历成为你的回答线索</h3><p>简历中的项目、技术选择和结果，会成为综合面试追问的起点。</p><div class="resume-aside-illustration"><span class="resume-paper"><i></i><i></i><i></i><b>✦</b></span><span class="resume-sun"></span></div><div class="aside-check"><span>✓</span> 上传后先检查解析结果</div><div class="aside-check"><span>✓</span> 修正错漏后再确认使用</div><div class="aside-check"><span>✓</span> 只在综合面试中关联简历</div></div></aside></div>
         </template>
@@ -801,20 +876,25 @@ function resetDemo() {
 
     <div v-if="reviewDialog && pendingReview" class="dialog-scrim" @click.self="cancelReview">
       <section class="review-dialog" role="dialog" aria-modal="true" :aria-label="pendingReview.type === 'resume' ? '确认简历解析结果' : '确认题库解析结果'">
-        <div class="dialog-top"><div><span class="section-kicker">REVIEW BEFORE USE</span><h2>{{ pendingReview.type === 'resume' ? '确认简历信息' : '确认题库问题' }}</h2><p>本地演示会展示模拟解析结果；确认后才可用于面试。</p></div><button class="dialog-close" aria-label="取消并删除上传文件" @click="cancelReview">×</button></div>
+        <div class="dialog-top"><div><span class="section-kicker">REVIEW BEFORE USE</span><h2>{{ pendingReview.type === 'resume' ? '检查并编辑简历' : '检查并编辑题库' }}</h2><p>来源文件已完成本地解析。保存修改后需再次确认，才能用于面试。</p></div><button class="dialog-close" aria-label="稍后检查" @click="cancelReview">×</button></div>
         <template v-if="pendingReview.type === 'resume'">
-          <label class="field-label">文件名称</label><input v-model="pendingReview.name" class="text-field" />
-          <label class="field-label dialog-field-label">教育经历</label><input v-model="pendingReview.education" class="text-field" />
-          <label class="field-label dialog-field-label">技能关键词</label><textarea v-model="pendingReview.skills" class="text-field dialog-textarea"></textarea>
-          <label class="field-label dialog-field-label">项目摘要</label><textarea v-model="pendingReview.project" class="text-field dialog-textarea"></textarea>
+          <label class="field-label">资料名称</label><input v-model="pendingReview.name" class="text-field" />
+          <div class="resume-edit-grid"><label><span class="field-label">姓名</span><input v-model="pendingReview.personalInfo.name" class="text-field" /></label><label><span class="field-label">邮箱</span><input v-model="pendingReview.personalInfo.email" class="text-field" /></label><label><span class="field-label">电话</span><input v-model="pendingReview.personalInfo.phone" class="text-field" /></label><label><span class="field-label">所在地</span><input v-model="pendingReview.personalInfo.location" class="text-field" /></label></div>
+          <label class="field-label dialog-field-label">教育经历（每行一项）</label><textarea v-model="pendingReview.educationText" class="text-field dialog-textarea"></textarea>
+          <label class="field-label dialog-field-label">工作 / 实习经历（每行一项）</label><textarea v-model="pendingReview.experienceText" class="text-field dialog-textarea"></textarea>
+          <div class="question-review-heading dialog-field-label"><span class="field-label">项目经历</span><button class="text-button" @click="addProject">＋ 添加项目</button></div>
+          <div class="question-review-list"><div v-for="(project, index) in pendingReview.projects" :key="index" class="question-edit-row resume-project-row"><span>{{ String(index + 1).padStart(2, '0') }}</span><div><input v-model="project.name" class="text-field" placeholder="项目名称" /><textarea v-model="project.technologiesText" class="text-field" placeholder="技术栈（逗号分隔）"></textarea><textarea v-model="project.outcomesText" class="text-field" placeholder="项目成果（每行一项）"></textarea></div><button @click="removeProject(index)" title="删除项目">×</button></div></div>
+          <label class="field-label dialog-field-label">技能关键词</label><textarea v-model="pendingReview.skillsText" class="text-field dialog-textarea"></textarea>
+          <label class="field-label dialog-field-label">量化结果（每行一项）</label><textarea v-model="pendingReview.metricsText" class="text-field dialog-textarea"></textarea>
+          <label class="field-label dialog-field-label">奖项 / 荣誉（每行一项）</label><textarea v-model="pendingReview.awardsText" class="text-field dialog-textarea"></textarea>
         </template>
         <template v-else>
           <label class="field-label">题库名称</label><input v-model="pendingReview.name" class="text-field" />
           <div class="question-review-heading"><span class="field-label">解析出的题目</span><button class="text-button" @click="addQuestion">＋ 添加问题</button></div>
-          <div class="question-review-list"><div v-for="(question, index) in pendingReview.questions" :key="index" class="question-edit-row"><span>{{ String(index + 1).padStart(2, '0') }}</span><textarea v-model="pendingReview.questions[index]" class="text-field"></textarea><button @click="removeQuestion(index)" title="删除问题">×</button></div></div>
+          <div class="question-review-list"><div v-for="(question, index) in pendingReview.questions" :key="index" class="question-edit-row"><span>{{ String(index + 1).padStart(2, '0') }}</span><div><textarea v-model="question.stem" class="text-field" placeholder="题目"></textarea><input v-model="question.answer" class="text-field" placeholder="参考答案（可选）" /><input v-model="question.category" class="text-field" placeholder="分类（可选）" /></div><button @click="removeQuestion(index)" title="删除问题">×</button></div></div>
         </template>
-        <div class="dialog-footnote"><span>◇</span> 原文件已保存到当前登录账号的私有空间；解析结果在本阶段由你手动填写，确认后才会进入本地业务记录。</div>
-        <div class="dialog-actions"><button class="subtle-button" @click="cancelReview">取消并删除上传文件</button><button class="primary-button" @click="confirmReview">确认并保存 <span>→</span></button></div>
+        <div class="dialog-footnote"><span>◇</span> 原始文件和解析结果仅对当前账号可见；未确认的资料不会被面试来源接口接受。</div>
+        <div class="dialog-actions"><button class="subtle-button" @click="cancelReview">稍后检查</button><button class="subtle-button" @click="saveReviewedDocument(false)">保存修改</button><button class="primary-button" @click="confirmReview">保存并确认 <span>→</span></button></div>
       </section>
     </div>
   </div>

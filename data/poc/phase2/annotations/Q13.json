@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q13",
+  "category": "question_bank",
+  "sha256": "7d805c67550219ff1b4c8e38e6933a4dd8c389b7013e95f585cff4ea77559624",
+  "groundTruth": {
+    "questions": [
+      "How would you evaluate resume field extraction quality?",
+      "How should question matching avoid duplicate true positives?",
+      "What evidence belongs in a parse result?"
+    ]
+  },
+  "annotationSource": "Synthetic fixture authored for Stage 2; no personal data"
+}

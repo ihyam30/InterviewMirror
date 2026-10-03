@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R03",
+  "category": "resume",
+  "sha256": "ad4a83b1fd51b9d17457c7b1c7a5d0d8f5f1f0c163d56aba27e8cfa4cd0b28fa",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R03",
+      "education": "Bachelor of Computer Science",
+      "skills": "Python, RAG, Evaluation",
+      "project": "Document Retrieval Service",
+      "metric": "Recall@5 0.88"
+    }
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

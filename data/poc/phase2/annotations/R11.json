@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R11",
+  "category": "resume",
+  "sha256": "44dca9db975bae27796d6104fec8d63a81dc60e8feb42bcb29cc1639a2440c9f",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R11",
+      "education": "Bachelor of Computer Science",
+      "skills": "Java, Spring Boot, PostgreSQL",
+      "project": "Local Interview Practice",
+      "metric": "Parse p95 38 seconds"
+    }
+  },
+  "annotationSource": "Synthetic fixture authored for Stage 2; no personal data"
+}

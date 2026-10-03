@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R06",
+  "category": "resume",
+  "sha256": "43736f62d5ced8a6b413208d37a41a8c4ce10f617dc884fbdcc8953f9ae63d13",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R06",
+      "education": "Bachelor of Artificial Intelligence",
+      "skills": "Python, LangGraph, Spring AI",
+      "project": "Interview Report Agent",
+      "metric": "40 test cases"
+    }
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

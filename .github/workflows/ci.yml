@@ -37,3 +37,14 @@ jobs:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
       - run: docker compose config --quiet
+
+  phase2-corpus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m py_compile scripts/phase2/*.py
+      - run: python scripts/phase2/verify_eval_dataset.py
+      - run: python -m unittest discover -s scripts/poc -p test_score_parser_outputs.py -v

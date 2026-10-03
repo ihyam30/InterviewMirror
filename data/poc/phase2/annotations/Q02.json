@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q02",
+  "category": "question_bank",
+  "sha256": "74d6fa2f73a3190cb0fff038478310d947566199261b7ef2756b08d1e9f70f05",
+  "groundTruth": {
+    "questions": [
+      "Describe a project you owned end to end.",
+      "How did you choose the database schema?",
+      "What trade-off did you make under a deadline?"
+    ]
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R10",
+  "category": "resume",
+  "sha256": "d4e2b5a7fc1e1c72991f98dc3a9cacab4ae0e1492eae46ae5d29a821e51001c8",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R10",
+      "education": "Bachelor of Computer Science",
+      "skills": "TypeScript, Java, Docker",
+      "project": "Local AI Demo",
+      "metric": "Startup 12 minutes"
+    }
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

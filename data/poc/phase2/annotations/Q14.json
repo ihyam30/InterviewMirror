@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q14",
+  "category": "question_bank",
+  "sha256": "121714c8ed6d8e991edc9b7263d4a115c7e975b30ce31b586a87853e2bd4591f",
+  "groundTruth": {
+    "questions": [
+      "How do you keep confirmed resume data trustworthy?",
+      "What should happen after editing confirmed content?",
+      "How do you restrict document access by owner?"
+    ]
+  },
+  "annotationSource": "Synthetic fixture authored for Stage 2; no personal data"
+}

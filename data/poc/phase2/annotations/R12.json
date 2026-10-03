@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R12",
+  "category": "resume",
+  "sha256": "704843f561b0f7998f6e3b02a0256a8e435fd2d71d6d22e5122c7c8c7b04d38b",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R12",
+      "education": "Bachelor of Software Engineering",
+      "skills": "Python, Vue 3, RAG",
+      "project": "Question Bank Importer",
+      "metric": "Recall@5 0.91"
+    }
+  },
+  "annotationSource": "Synthetic fixture authored for Stage 2; no personal data"
+}

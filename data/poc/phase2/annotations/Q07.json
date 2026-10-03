@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q07",
+  "category": "question_bank",
+  "sha256": "3efb85ee291b6967369f47b9074ba7c6faafb093ba87f192b0bda5bf08788fd2",
+  "groundTruth": {
+    "questions": [
+      "Compare polling with server-sent events.",
+      "How do you set a report generation timeout?",
+      "How would you test an early interview end?"
+    ]
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

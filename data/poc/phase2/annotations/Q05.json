@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q05",
+  "category": "question_bank",
+  "sha256": "6fc17e36ed2196b9d0081f60434a115262e6b3a45b951e42c784742aa148d96b",
+  "groundTruth": {
+    "questions": [
+      "Explain SSE reconnect behavior.",
+      "How do you persist partial model output?",
+      "What belongs in a trace identifier?"
+    ]
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

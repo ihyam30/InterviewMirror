@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q08",
+  "category": "question_bank",
+  "sha256": "193a477ae47c4e52fe78878d229a3eada3bfb42c4ee8bbc0181c9372594f72e6",
+  "groundTruth": {
+    "questions": [
+      "How do you detect an OCR extraction failure?",
+      "How can a user correct parsed questions?",
+      "When should a document be marked unprocessable?"
+    ]
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

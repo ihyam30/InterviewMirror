@@ -1,10 +1,10 @@
 # 面镜 InterviewMirror
 
-面向 AI 应用 / AI 全栈实习求职者的文字面试练习 Demo。当前阶段是**本地工程基础**：现有 Vue 交互 UI 保留；登录、简历/题库确认记录、用户私有文件已接入本地后端。正式 AI 面试流程、真实解析、动态报告和历史报告持久化仍在后续阶段。
+面向 AI 应用 / AI 全栈实习求职者的本地面试陪练应用。当前已完成本地工程基础和**简历 / 自定义题库管理**：资料上传后由本机 MinerU 异步解析，用户可以预览、编辑和确认；只有已确认资料可作为后续面试来源。正式 AI 面试、SSE 问答、动态报告和历史报告持久化仍在后续阶段。
 
 ## 本地启动
 
-运行应用只需要 Docker Desktop（含 Docker Compose v2），不需要本机安装 Java、Maven、Node 或数据库。首次构建需要网络拉取容器镜像和 Maven/npm 依赖。
+运行 Web 应用只需要 Docker Desktop（含 Docker Compose v2），不需要本机安装 Java、Maven、Node 或数据库。首次构建需要网络拉取容器镜像和 Maven/npm 依赖。文档解析另需本机已安装阶段 0 锁定的 MinerU Python 运行环境和模型文件；本地 Worker 仅绑定回环/容器宿主网络，不使用托管解析服务。
 
 ```powershell
 Copy-Item .env.example .env
@@ -28,7 +28,13 @@ docker compose ps
 | `demo1` 或 `demo1@local.interviewmirror` | `MirrorDemo1!` |
 | `demo2` 或 `demo2@local.interviewmirror` | `MirrorDemo2!` |
 
-可在本地 `.env` 覆盖演示密码及服务端口。`.env` 不纳入 Git。不要将默认示例凭证用于共享或公网环境。所有宿主机端口都绑定到 `127.0.0.1`。
+可在本地 `.env` 覆盖演示密码及服务端口。`.env` 不纳入 Git。不要将默认示例凭证用于共享或公网环境。所有 Compose 宿主机端口都绑定到 `127.0.0.1`。开始文档解析前，在 `.env` 设置至少 32 字符的随机 `MINERU_WORKER_TOKEN`，并在独立 PowerShell 窗口运行：
+
+```powershell
+pwsh -File .\scripts\phase2\start-mineru-worker.ps1
+```
+
+Worker 启动时验证锁定的 MinerU 运行时及本地模型。文本题库直接读取 UTF-8 文本；PDF/DOCX 走本机 MinerU 4.0.10。Worker 绑定 `127.0.0.1`，由 Docker host gateway 转发供 Compose 后端访问，并要求独立随机令牌；Compose 不发布此端口。不要把端口改成公网监听或复用其他 API Key 作为访问令牌。没有运行 Worker 时，持久化任务会显示失败状态；启动 Worker 后在资料页点“重新解析”即可重试。
 
 MinIO 管理台凭证为 `.env` 中的 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD`。产品文件桶为私有桶；前端不会获得 S3 凭证或永久/预签名对象 URL。Compose 使用官方归档源码固定 tag 构建 MinIO，不依赖已下架的 Community 镜像仓库或发布二进制。官方 MinIO Community 仓库已归档，源码构建产物不受上游支持，因此此配置仅适用于绑定到 loopback 的个人本地演示；不得复用于共享或公网服务。未来扩展使用前应切换到有持续维护的发行版或兼容对象存储，并重新执行对象访问权限与兼容性验收。
 
@@ -37,7 +43,9 @@ MinIO 管理台凭证为 `.env` 中的 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWOR
 - 用户名或邮箱登录、当前用户、退出登录；服务端 Session Cookie（HttpOnly、SameSite=Strict）与 CSRF 校验。
 - `/api/v1/resources` 提供用户私有资源 CRUD；数据库查询、更新和删除均把认证用户 ID 放进 SQL 条件，跨账号不存在性统一返回 404。
 - `/api/v1/files` 提供用户私有文件上传、metadata、下载和删除；服务端仅接受 PDF、DOCX、TXT 和 Markdown，并校验扩展名、MIME 类型及 PDF/DOCX 文件签名；文件大小上限 20 MiB；API 不返回对象 key，私有桶不能匿名直连。
-- 简历和题库确认信息保存到 PostgreSQL，原始文件保存到 MinIO；本阶段不解析 PDF/DOCX/TXT、不调用模型。
+- 简历和题库保存到 PostgreSQL，原始文件保存到私有 MinIO。状态包括 `PENDING`、`PROCESSING`、`PARSED`、`FAILED`、`CONFIRMED`、`DELETING` 和 `DELETE_FAILED`；页面支持解析预览、字段 / 项目编辑、题目增删、失败重试和删除。保存编辑后的资料会失效原确认，需要重新确认。
+- 解析任务持久化在 PostgreSQL；Worker 领取任务使用租约和 attempt fencing，进程重启后回收过期任务，迟到的旧 Worker 结果不会覆盖新尝试。解析和对象存储不在单一事务内；MinIO 删除失败会保留 `DELETE_FAILED` 记录供用户重试。
+- `/api/v1/interview-sources/resumes/{id}` 与 `/api/v1/interview-sources/question-banks/{id}` 在后端强制校验当前用户归属和 `CONFIRMED` 状态；资料列表也支持 `?usableOnly=true`。前端禁用状态仅用于交互，不能代替后端门禁。
 - 报告及完整差异分析仍为只读示例数据，不属于账号私有历史记录；页面有提示。
 - 仅本地演示；不提供公网部署、注册、邮件验证或生产级账号管理。
 
@@ -58,6 +66,24 @@ POST   /api/v1/files                 multipart field: file
 GET    /api/v1/files/{uuid}
 GET    /api/v1/files/{uuid}/content
 DELETE /api/v1/files/{uuid}
+GET    /api/v1/resumes?usableOnly=false
+POST   /api/v1/resumes                 multipart field: file
+GET    /api/v1/resumes/{uuid}
+PUT    /api/v1/resumes/{uuid}          contentVersion 乐观锁
+POST   /api/v1/resumes/{uuid}/confirm
+POST   /api/v1/resumes/{uuid}/retry
+DELETE /api/v1/resumes/{uuid}
+GET    /api/v1/question-banks?usableOnly=false
+POST   /api/v1/question-banks          multipart field: file
+POST   /api/v1/question-banks/manual
+GET    /api/v1/question-banks/{uuid}
+PUT    /api/v1/question-banks/{uuid}
+POST   /api/v1/question-banks/{uuid}/confirm
+POST   /api/v1/question-banks/{uuid}/retry
+DELETE /api/v1/question-banks/{uuid}
+GET    /api/v1/parse-tasks/{uuid}
+GET    /api/v1/interview-sources/resumes/{uuid}
+GET    /api/v1/interview-sources/question-banks/{uuid}
 ```
 
 ## 停止与清理
@@ -85,6 +111,15 @@ docker compose config --quiet
 ```
 
 本地启动整个应用仍使用 `docker compose up --build -d`。后端集成测试使用 H2 和内存对象存储替身验证两用户的资源、文件访问隔离；本机 Compose 验收还应验证真实 PostgreSQL、MinIO 和各 HTTP API。CI 在干净 GitHub Actions runner 上执行前端测试/构建、后端测试和 Compose 配置校验。
+
+阶段 2 MinerU 全量评测要求已安装并启动本地 Worker、Compose 服务健康、`.env` 中 `DEMO2_PASSWORD` 与服务端一致：
+
+```powershell
+pwsh -File .\scripts\phase2\run-evaluation.ps1 -PerDocumentTimeout 600
+scripts\poc\.mineru\Scripts\python.exe scripts\phase2\export_evaluation_snapshot.py
+```
+
+评测脚本验证锁定 Python / 数据集 SHA，对 30 份合成样例逐份走真实上传、任务、解析与结构化保存，原始结果写入被 Git 忽略的 `data/poc/results/phase2/live-evaluation.json`，可审阅快照保存在 `docs/phase2/results/live-evaluation.json`；脚本只删除本轮创建的资料，并会报告清理失败。当前数据集为受控合成样例，不含真实个人信息；尚未由独立第二位评审者复核全部标注，真实简历分布上的泛化能力仍需后续授权样本验证。详见 [`docs/phase2/EVALUATION.md`](docs/phase2/EVALUATION.md) 和 [`docs/phase2/PARSING-PIPELINE.md`](docs/phase2/PARSING-PIPELINE.md)。
 
 Compose 健康后可执行真实服务 smoke test（脚本会创建并在末尾删除一条合成资源和文件）：
 

@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R05",
+  "category": "resume",
+  "sha256": "38b1f9bdf6cfe89492775f3e2218f4691312a4dfeaf22b97421dea18bbda418e",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R05",
+      "education": "Bachelor of Computer Engineering",
+      "skills": "Java, OCR, RAG",
+      "project": "Scanned Resume Parser",
+      "metric": "F1 0.91"
+    }
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

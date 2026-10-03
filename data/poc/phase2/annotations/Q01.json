@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q01",
+  "category": "question_bank",
+  "sha256": "2f4a66184bc3f580cca1d981ee84005b9d3727855eae109cf0f47e43dd14dcd8",
+  "groundTruth": {
+    "questions": [
+      "Explain the RAG retrieval pipeline.",
+      "How would you build an offline evaluation set?",
+      "How do you measure citation correctness?"
+    ]
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

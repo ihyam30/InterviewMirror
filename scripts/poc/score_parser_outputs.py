@@ -93,7 +93,7 @@ def question_lines(text: str) -> list[str]:
         if not clean:
             continue
         cells = [c.strip() for c in clean.strip("|").split("|")]
-        if len(cells) >= 2 and re.match(r"^(?:Q|Question)\s*\d+\b", cells[0], re.I):
+        if len(cells) >= 2 and re.match(r"^(?:(?:Q|Question)\s*)?#?\s*\d{1,3}$", cells[0], re.I):
             found.append(cells[1])
         elif re.match(r"^(?:#{1,6}\s*)?(?:Q|Question)\s*\d+\s*[:.)、|\-]?\s*\S", clean, re.I):
             value = re.sub(r"^(?:#{1,6}\s*)?(?:Q|Question)\s*\d+\s*[:.)、|\-]?\s*", "", clean, flags=re.I)

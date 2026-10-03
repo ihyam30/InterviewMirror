@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R02",
+  "category": "resume",
+  "sha256": "d48e8af2032108b7305a8eb8f2578b2d475b095db062b7eb0c171192eabbd3e8",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R02",
+      "education": "Bachelor of Software Engineering",
+      "skills": "Java, Vue 3, REST API",
+      "project": "AI Interview Practice",
+      "metric": "P95 1.8 seconds"
+    }
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

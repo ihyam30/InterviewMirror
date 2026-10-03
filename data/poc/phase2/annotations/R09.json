@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R09",
+  "category": "resume",
+  "sha256": "200d7dc94bd26ff9333465fb164d1d09a38fe16b19111328c7274f8e7aece05d",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R09",
+      "education": "Bachelor of Software Engineering",
+      "skills": "Java, Spring Boot, SSE",
+      "project": "Streaming Answer UI",
+      "metric": "Retry rate 1.2%"
+    }
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

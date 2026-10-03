@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q04",
+  "category": "question_bank",
+  "sha256": "fc3f6177d9bcef553b0ed6e1fbc253b160d0b27fb4fbd4bf80170ff5dbc00579",
+  "groundTruth": {
+    "questions": [
+      "Design a resilient model API client.",
+      "How should retries use exponential backoff?",
+      "How do you prevent duplicate report creation?"
+    ]
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

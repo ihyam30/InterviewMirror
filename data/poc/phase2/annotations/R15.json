@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R15",
+  "category": "resume",
+  "sha256": "5a77d0bf2bc36943996c7d52871f101dde3bf1ebe1f720e71ca6d91de33073fd",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R15",
+      "education": "Bachelor of Computer Engineering",
+      "skills": "Java, OCR, Document Parsing",
+      "project": "Synthetic OCR Evaluation",
+      "metric": "Question recall 0.92"
+    }
+  },
+  "annotationSource": "Synthetic fixture authored for Stage 2; no personal data"
+}

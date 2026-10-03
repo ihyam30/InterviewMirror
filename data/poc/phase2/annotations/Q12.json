@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q12",
+  "category": "question_bank",
+  "sha256": "a0a3f2ab62ebcecb46f40b7481acb6c8123772628bc56f8fb0ba1977e958f148",
+  "groundTruth": {
+    "questions": [
+      "How do you validate uploaded PDF and DOCX files?",
+      "What data should a parse task persist?",
+      "How do you handle deletion when object storage fails?"
+    ]
+  },
+  "annotationSource": "Synthetic fixture authored for Stage 2; no personal data"
+}

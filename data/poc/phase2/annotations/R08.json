@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R08",
+  "category": "resume",
+  "sha256": "ceb6a33c1fdebea33c87f3f8c7c306ed1c2c7ddbfad9b086da0485ac199c331f",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R08",
+      "education": "Bachelor of Data Science",
+      "skills": "Python, SQL, RAG",
+      "project": "Question Bank Builder",
+      "metric": "Question recall 0.93"
+    }
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

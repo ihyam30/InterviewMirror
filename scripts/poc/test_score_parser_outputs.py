@@ -45,6 +45,19 @@ class QuestionMatchingTests(unittest.TestCase):
         matches = match_questions(["same question", "same question"], ["same question"])
         self.assertEqual(len(matches), 1)
 
+    def test_numeric_markdown_table_rows_extract_questions(self) -> None:
+        parsed = """| # | Question |
+| --- | --- |
+| 1 | Explain SSE reconnect behavior. |
+| 2 | How do you persist partial model output? |
+| 3 | What belongs in a trace identifier? |
+"""
+        self.assertEqual(question_lines(parsed), [
+            "Explain SSE reconnect behavior.",
+            "How do you persist partial model output?",
+            "What belongs in a trace identifier?",
+        ])
+
 
 class ProvenanceTests(unittest.TestCase):
     def setUp(self) -> None:

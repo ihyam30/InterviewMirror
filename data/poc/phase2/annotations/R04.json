@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R04",
+  "category": "resume",
+  "sha256": "474af5bb74b222bf27efb2c5fff1d745e1973b87878d58b2209670d06192ec68",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R04",
+      "education": "Bachelor of Information Systems",
+      "skills": "Java, Spring Boot, PostgreSQL",
+      "project": "Campus Knowledge Assistant",
+      "metric": "1,200 documents"
+    }
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

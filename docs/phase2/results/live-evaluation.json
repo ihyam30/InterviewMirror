@@ -1,0 +1,850 @@
+{
+  "schemaVersion": "interviewmirror.phase2-live-evaluation.v1.1",
+  "runAt": "2026-10-03T03:40:18.742528+00:00",
+  "datasetId": "interviewmirror-stage2-synthetic-30",
+  "datasetManifestSha256": "ac4fa6c67ff3deef5b815a9664b123f19a192dc4b3d7f2e3504c025fe987e5a0",
+  "gitHead": "f39e09abb529629fdc903067eaa0a4e505ee9bc0",
+  "mineruVersion": "4.0.10",
+  "runtime": {
+    "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+    "platform": "win32"
+  },
+  "hardware": {
+    "processor": "Intel64 Family 6 Model 190 Stepping 0, GenuineIntel",
+    "logicalCpuCount": 4
+  },
+  "parserConfig": {
+    "pdfTier": "basic",
+    "docxTier": "flash",
+    "textMode": "direct-read",
+    "remoteParsing": false
+  },
+  "totalLabeledDocuments": 30,
+  "resume": {
+    "tp": 75,
+    "fp": 0,
+    "fn": 0,
+    "fields": 75,
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0
+  },
+  "questionBank": {
+    "matched": 45,
+    "predicted": 49,
+    "expected": 45,
+    "precision": 0.9183673469387755,
+    "recall": 1.0
+  },
+  "parseDurationMs": {
+    "completedSamples": 30,
+    "p50": 5758,
+    "p95": 16039,
+    "max": 19389,
+    "allSamplesTerminal": true
+  },
+  "gates": {
+    "documentsAtLeast30": true,
+    "resumeF1AtLeast90": true,
+    "questionRecallAtLeast90": true,
+    "parseP95AtMost60Seconds": true,
+    "allDocumentsParsed": true
+  },
+  "samples": [
+    {
+      "sampleId": "Q01",
+      "category": "question_bank",
+      "inputSha256": "2f4a66184bc3f580cca1d981ee84005b9d3727855eae109cf0f47e43dd14dcd8",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:35:15.362435Z",
+      "startedAt": "2026-10-03T03:35:17.273848Z",
+      "completedAt": "2026-10-03T03:35:17.319342Z",
+      "durationMs": 45,
+      "parsedContentSha256": "3a2996c80659fdf6a6268c16194cc0545aaa207175239b2178ad5f20e607f450",
+      "matched": 3,
+      "predicted": 3,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 0
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 2
+        }
+      ]
+    },
+    {
+      "sampleId": "Q02",
+      "category": "question_bank",
+      "inputSha256": "74d6fa2f73a3190cb0fff038478310d947566199261b7ef2756b08d1e9f70f05",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:35:18.180221Z",
+      "startedAt": "2026-10-03T03:35:19.331344Z",
+      "completedAt": "2026-10-03T03:35:19.380473Z",
+      "durationMs": 49,
+      "parsedContentSha256": "7529545f39ffdbe85a0319e0487c2a782ce74fe4bf982bd394e6bd8f910459d3",
+      "matched": 3,
+      "predicted": 4,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 2
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 3
+        }
+      ]
+    },
+    {
+      "sampleId": "Q03",
+      "category": "question_bank",
+      "inputSha256": "645be5ad30683506689ba0c25cadb6cc9b295e4c52eb9ad5a3f442a8f5992ded",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:35:19.605367Z",
+      "startedAt": "2026-10-03T03:35:21.392757Z",
+      "completedAt": "2026-10-03T03:35:21.427904Z",
+      "durationMs": 35,
+      "parsedContentSha256": "5d9351339e0ac8026a959d242c5da551c3b035cd3ff80378fac118f045f5e902",
+      "matched": 3,
+      "predicted": 3,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 0
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 2
+        }
+      ]
+    },
+    {
+      "sampleId": "Q04",
+      "category": "question_bank",
+      "inputSha256": "fc3f6177d9bcef553b0ed6e1fbc253b160d0b27fb4fbd4bf80170ff5dbc00579",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:35:22.431288Z",
+      "startedAt": "2026-10-03T03:35:23.619053Z",
+      "completedAt": "2026-10-03T03:35:34.627787Z",
+      "durationMs": 11008,
+      "parsedContentSha256": "a44512f2b67e3877e321d567bb23656d12e86633f70a45a2cd286fa0fada79ea",
+      "matched": 3,
+      "predicted": 3,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 0
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 2
+        }
+      ]
+    },
+    {
+      "sampleId": "Q05",
+      "category": "question_bank",
+      "inputSha256": "6fc17e36ed2196b9d0081f60434a115262e6b3a45b951e42c784742aa148d96b",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:35:35.798243Z",
+      "startedAt": "2026-10-03T03:35:36.667752Z",
+      "completedAt": "2026-10-03T03:35:52.102888Z",
+      "durationMs": 15435,
+      "parsedContentSha256": "035d160a4206bc79c52cc8fb30f3b683ea63bddf455c130a89c3dab132da3e1f",
+      "matched": 3,
+      "predicted": 3,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 0
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 2
+        }
+      ]
+    },
+    {
+      "sampleId": "Q06",
+      "category": "question_bank",
+      "inputSha256": "8440d6a811adf959d01957c13a52d0e80269ebb89913501586691fc46a18efb5",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:35:52.703672Z",
+      "startedAt": "2026-10-03T03:35:54.113521Z",
+      "completedAt": "2026-10-03T03:35:54.158371Z",
+      "durationMs": 44,
+      "parsedContentSha256": "22d76b7bc1448e53939681f52474c8f387370df37ac2d492ab79b860a98a2005",
+      "matched": 3,
+      "predicted": 4,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 2
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 3
+        }
+      ]
+    },
+    {
+      "sampleId": "Q07",
+      "category": "question_bank",
+      "inputSha256": "3efb85ee291b6967369f47b9074ba7c6faafb093ba87f192b0bda5bf08788fd2",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:35:55.546336Z",
+      "startedAt": "2026-10-03T03:35:56.171525Z",
+      "completedAt": "2026-10-03T03:35:56.338896Z",
+      "durationMs": 167,
+      "parsedContentSha256": "3c3aa940c102c32b7610fadb7514ec620aec0c6a988b4c4619afe8bcac76715d",
+      "matched": 3,
+      "predicted": 3,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 0
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 2
+        }
+      ]
+    },
+    {
+      "sampleId": "Q08",
+      "category": "question_bank",
+      "inputSha256": "193a477ae47c4e52fe78878d229a3eada3bfb42c4ee8bbc0181c9372594f72e6",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:35:58.454730Z",
+      "startedAt": "2026-10-03T03:35:59.820800Z",
+      "completedAt": "2026-10-03T03:36:14.711612Z",
+      "durationMs": 14890,
+      "parsedContentSha256": "3e70da315ccde093a3ca4f7a7552db2378a165034d91938c9e7323285e215ffd",
+      "matched": 3,
+      "predicted": 4,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 2
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 3
+        }
+      ]
+    },
+    {
+      "sampleId": "Q09",
+      "category": "question_bank",
+      "inputSha256": "3c61bc1a17ced00c73c0a72e0cda5fea77428c003105b06c90c67af03b19d9da",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:36:15.497562Z",
+      "startedAt": "2026-10-03T03:36:16.723594Z",
+      "completedAt": "2026-10-03T03:36:16.760186Z",
+      "durationMs": 36,
+      "parsedContentSha256": "265f8ade53b139e5027a7680b365aa47eb9b0456578a850ab16bddfc47a52455",
+      "matched": 3,
+      "predicted": 3,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 0
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 2
+        }
+      ]
+    },
+    {
+      "sampleId": "Q10",
+      "category": "question_bank",
+      "inputSha256": "af7d73d13dd90cc6a090b1dc1d6bae66690f6e7d0c884f92b7f79970100ef55c",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:36:16.932638Z",
+      "startedAt": "2026-10-03T03:36:18.771156Z",
+      "completedAt": "2026-10-03T03:36:18.806329Z",
+      "durationMs": 35,
+      "parsedContentSha256": "3e2fd6b309eed3d4015470c9d0747083ec660aa80ef46a5304aa04072c392508",
+      "matched": 3,
+      "predicted": 4,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 2
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 3
+        }
+      ]
+    },
+    {
+      "sampleId": "Q11",
+      "category": "question_bank",
+      "inputSha256": "55ef63c050c85fb32ab8f789aeed57046e8684b347ddaefac56ca3242d966aa2",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:36:19.792328Z",
+      "startedAt": "2026-10-03T03:36:20.819046Z",
+      "completedAt": "2026-10-03T03:36:35.966860Z",
+      "durationMs": 15147,
+      "parsedContentSha256": "7f09aa6dec9a7bf3f4d7d222be025b6b5e838bbef249678e3b14828001469d8f",
+      "matched": 3,
+      "predicted": 3,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 0
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 2
+        }
+      ]
+    },
+    {
+      "sampleId": "Q12",
+      "category": "question_bank",
+      "inputSha256": "a0a3f2ab62ebcecb46f40b7481acb6c8123772628bc56f8fb0ba1977e958f148",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:36:36.555749Z",
+      "startedAt": "2026-10-03T03:36:37.986835Z",
+      "completedAt": "2026-10-03T03:36:43.357769Z",
+      "durationMs": 5370,
+      "parsedContentSha256": "e2c6b7bf8b0c28fd19a9f216e3daeafdc9343493c86085d0c3e39d36f986da9d",
+      "matched": 3,
+      "predicted": 3,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 0
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 2
+        }
+      ]
+    },
+    {
+      "sampleId": "Q13",
+      "category": "question_bank",
+      "inputSha256": "7d805c67550219ff1b4c8e38e6933a4dd8c389b7013e95f585cff4ea77559624",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:36:43.586253Z",
+      "startedAt": "2026-10-03T03:36:45.369634Z",
+      "completedAt": "2026-10-03T03:36:45.404077Z",
+      "durationMs": 34,
+      "parsedContentSha256": "76250d881219d298a557bbd268955bb2a86009014ac532562ec6f58d6e032683",
+      "matched": 3,
+      "predicted": 3,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 0
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 2
+        }
+      ]
+    },
+    {
+      "sampleId": "Q14",
+      "category": "question_bank",
+      "inputSha256": "121714c8ed6d8e991edc9b7263d4a115c7e975b30ce31b586a87853e2bd4591f",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:36:46.461195Z",
+      "startedAt": "2026-10-03T03:36:47.413674Z",
+      "completedAt": "2026-10-03T03:37:00.093429Z",
+      "durationMs": 12679,
+      "parsedContentSha256": "97262f312ba14cb530c6ebc7245655b979852163d30dd77d8fd54023cbb243f2",
+      "matched": 3,
+      "predicted": 3,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 0
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 2
+        }
+      ]
+    },
+    {
+      "sampleId": "Q15",
+      "category": "question_bank",
+      "inputSha256": "371a50d3170c050144d320e93b950e40ef5c607f1d1c8d9fa617c71a657f69f9",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:37:00.510912Z",
+      "startedAt": "2026-10-03T03:37:04.898837Z",
+      "completedAt": "2026-10-03T03:37:04.927288Z",
+      "durationMs": 28,
+      "parsedContentSha256": "8409eeb89db68f4b851a1846889ec7f541138c49ed76e719b57502efe0dffc15",
+      "matched": 3,
+      "predicted": 3,
+      "expected": 3,
+      "matches": [
+        {
+          "expectedIndex": 0,
+          "predictedIndex": 0
+        },
+        {
+          "expectedIndex": 1,
+          "predictedIndex": 1
+        },
+        {
+          "expectedIndex": 2,
+          "predictedIndex": 2
+        }
+      ]
+    },
+    {
+      "sampleId": "R01",
+      "category": "resume",
+      "inputSha256": "22988e368e4cce6329037a67582f0016c3dd3eee24c15f61ea8ca5660c5fa5d8",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:37:06.151019Z",
+      "startedAt": "2026-10-03T03:37:06.946357Z",
+      "completedAt": "2026-10-03T03:37:20.184566Z",
+      "durationMs": 13238,
+      "parsedContentSha256": "7ea23c057feff95f4ccc641304064b9083d36fb1d5c5745187c8700cf2e3782c",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R02",
+      "category": "resume",
+      "inputSha256": "d48e8af2032108b7305a8eb8f2578b2d475b095db062b7eb0c171192eabbd3e8",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:37:20.315975Z",
+      "startedAt": "2026-10-03T03:37:22.198379Z",
+      "completedAt": "2026-10-03T03:37:29.820301Z",
+      "durationMs": 7621,
+      "parsedContentSha256": "5618f847963e6da36be45b942e1ace38361faa8ac7a622cf8e2654af8db0c22d",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R03",
+      "category": "resume",
+      "inputSha256": "ad4a83b1fd51b9d17457c7b1c7a5d0d8f5f1f0c163d56aba27e8cfa4cd0b28fa",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:37:30.117105Z",
+      "startedAt": "2026-10-03T03:37:31.836811Z",
+      "completedAt": "2026-10-03T03:37:51.226565Z",
+      "durationMs": 19389,
+      "parsedContentSha256": "1b2806c14e6986ef6888fdf4579a1cdb3e353bd534a7287122dbddf9a86bcd39",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R04",
+      "category": "resume",
+      "inputSha256": "474af5bb74b222bf27efb2c5fff1d745e1973b87878d58b2209670d06192ec68",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:37:52.027652Z",
+      "startedAt": "2026-10-03T03:37:53.237189Z",
+      "completedAt": "2026-10-03T03:37:58.776610Z",
+      "durationMs": 5539,
+      "parsedContentSha256": "f2fe6f8e09907112cdbc68b2a64e1127d8e5b4ed243d65001f063ece4ede9569",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R05",
+      "category": "resume",
+      "inputSha256": "38b1f9bdf6cfe89492775f3e2218f4691312a4dfeaf22b97421dea18bbda418e",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:37:59.009813Z",
+      "startedAt": "2026-10-03T03:38:00.793468Z",
+      "completedAt": "2026-10-03T03:38:16.832712Z",
+      "durationMs": 16039,
+      "parsedContentSha256": "c9d08b80de82a9dcb2b24b62b88104dd14c1a722c2a0e7c1076055b6a4e749eb",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R06",
+      "category": "resume",
+      "inputSha256": "43736f62d5ced8a6b413208d37a41a8c4ce10f617dc884fbdcc8953f9ae63d13",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:38:17.489884Z",
+      "startedAt": "2026-10-03T03:38:18.846163Z",
+      "completedAt": "2026-10-03T03:38:24.384556Z",
+      "durationMs": 5538,
+      "parsedContentSha256": "9959c836332386a5f5c1f6b603346126ced7ccf4a2986d976d0b7fd72255102c",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R07",
+      "category": "resume",
+      "inputSha256": "4e9f488cbc61714f44aadba51c0fa38ed0c0cfd8c1f39da4ef88d1d64b66aaab",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:38:24.446278Z",
+      "startedAt": "2026-10-03T03:38:26.397037Z",
+      "completedAt": "2026-10-03T03:38:39.464218Z",
+      "durationMs": 13067,
+      "parsedContentSha256": "72939cca283eba1073261ebe999a8d457bc79a5ae50702e2bfb7c4ce80d56584",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R08",
+      "category": "resume",
+      "inputSha256": "ceb6a33c1fdebea33c87f3f8c7c306ed1c2c7ddbfad9b086da0485ac199c331f",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:38:42.623321Z",
+      "startedAt": "2026-10-03T03:38:43.591871Z",
+      "completedAt": "2026-10-03T03:38:49.205961Z",
+      "durationMs": 5614,
+      "parsedContentSha256": "81d748ad349602062cdadc2d64ddc33a3773dcc19a56bf451c22e1b6934637d6",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R09",
+      "category": "resume",
+      "inputSha256": "200d7dc94bd26ff9333465fb164d1d09a38fe16b19111328c7274f8e7aece05d",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:38:49.690653Z",
+      "startedAt": "2026-10-03T03:38:51.219716Z",
+      "completedAt": "2026-10-03T03:39:04.195128Z",
+      "durationMs": 12975,
+      "parsedContentSha256": "bbaf5e59a5e8fadeb95f651b7809c7065fe52abb1c4a84e034435cc042b4f607",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R10",
+      "category": "resume",
+      "inputSha256": "d4e2b5a7fc1e1c72991f98dc3a9cacab4ae0e1492eae46ae5d29a821e51001c8",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:39:05.120692Z",
+      "startedAt": "2026-10-03T03:39:06.204452Z",
+      "completedAt": "2026-10-03T03:39:14.463602Z",
+      "durationMs": 8259,
+      "parsedContentSha256": "89f61a9196dd6acc1fa435d1d58a635a2bac6ee8fb29f4952d08ce6f97999682",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R11",
+      "category": "resume",
+      "inputSha256": "44dca9db975bae27796d6104fec8d63a81dc60e8feb42bcb29cc1639a2440c9f",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:39:14.832426Z",
+      "startedAt": "2026-10-03T03:39:16.475476Z",
+      "completedAt": "2026-10-03T03:39:29.245874Z",
+      "durationMs": 12770,
+      "parsedContentSha256": "42e4e6a93554ec30d43adffd765b8c1bef058002a5889f7a1ededb3298de28cc",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R12",
+      "category": "resume",
+      "inputSha256": "704843f561b0f7998f6e3b02a0256a8e435fd2d71d6d22e5122c7c8c7b04d38b",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:39:30.463187Z",
+      "startedAt": "2026-10-03T03:39:31.265403Z",
+      "completedAt": "2026-10-03T03:39:37.023435Z",
+      "durationMs": 5758,
+      "parsedContentSha256": "951e1fd82058a02c915e4feaa79b9ff38c364469e5b451accac43a43832c544e",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R13",
+      "category": "resume",
+      "inputSha256": "b8f100e4f6e26737afc3d51c55644ad48586220e5c9b3261fe178577f5c29b62",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:39:37.484818Z",
+      "startedAt": "2026-10-03T03:39:39.034389Z",
+      "completedAt": "2026-10-03T03:39:53.828590Z",
+      "durationMs": 14794,
+      "parsedContentSha256": "0b5bdf65740e3d535b8be2ab51ff6944585b6d9870087542d50909ff0137332f",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R14",
+      "category": "resume",
+      "inputSha256": "e1eee58f9a7489c2fe1b8658eee253610c1e3341ba1da3b09c13563a10803bb1",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:39:54.238244Z",
+      "startedAt": "2026-10-03T03:39:55.844188Z",
+      "completedAt": "2026-10-03T03:40:01.228686Z",
+      "durationMs": 5384,
+      "parsedContentSha256": "97969948d00a8356b6564981e98cb570535fe7b3e9c74dcea56a2106292468e4",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    },
+    {
+      "sampleId": "R15",
+      "category": "resume",
+      "inputSha256": "5a77d0bf2bc36943996c7d52871f101dde3bf1ebe1f720e71ca6d91de33073fd",
+      "status": "PARSED",
+      "retryCount": 0,
+      "errorCode": null,
+      "queuedAt": "2026-10-03T03:40:02.679835Z",
+      "startedAt": "2026-10-03T03:40:03.240430Z",
+      "completedAt": "2026-10-03T03:40:17.251798Z",
+      "durationMs": 14011,
+      "parsedContentSha256": "4d1183421861188eb88c35ea1b7a2c9cd6da680d764d6347e835ddcf1573097c",
+      "truePositive": 5,
+      "falsePositive": 0,
+      "falseNegative": 0,
+      "fieldMatches": {
+        "name": true,
+        "education": true,
+        "skills": true,
+        "project": true,
+        "metric": true
+      }
+    }
+  ]
+}

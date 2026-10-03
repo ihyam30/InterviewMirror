@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q06",
+  "category": "question_bank",
+  "sha256": "8440d6a811adf959d01957c13a52d0e80269ebb89913501586691fc46a18efb5",
+  "groundTruth": {
+    "questions": [
+      "How would you design resume ownership checks?",
+      "What should be deleted with a resume?",
+      "How do you keep secrets out of logs?"
+    ]
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

@@ -1,0 +1,5 @@
+# Question Bank Q15
+
+Q1: How would you recover after the backend restarts?
+Q2: How do you measure parsing p95 latency?
+Q3: How should parser errors be shown to users?

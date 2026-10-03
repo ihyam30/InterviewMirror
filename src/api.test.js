@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { currentUser, login, logout, refreshCsrf, ApiError } from './api.js'
 import { cancelPendingReview } from './pending-review.js'
+import { canReviewDocument, canRetryDocument, canUseDocument, documentStatusLabel } from './document-state.js'
+import { createDocument, updateDocument, validateInterviewSource } from './api.js'
+import { buildResumeContent, projectRowsForReview } from './document-content.js'
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -72,4 +75,55 @@ test('pending review closes after file deletion succeeds or no uploaded file exi
 
   await cancelPendingReview({ fileId: null }, async () => assert.fail('deleteFile should not run'), () => { closeCount += 1 })
   assert.equal(closeCount, 2)
+})
+
+test('document lifecycle labels and actions require the server confirmed flag', () => {
+  assert.equal(documentStatusLabel('PENDING'), '等待解析')
+  assert.equal(documentStatusLabel('PROCESSING'), '正在解析')
+  assert.equal(documentStatusLabel('PARSED'), '解析完成 · 待确认')
+  assert.equal(documentStatusLabel('FAILED'), '解析失败')
+  assert.equal(canReviewDocument({ status: 'PARSED' }), true)
+  assert.equal(canRetryDocument({ status: 'FAILED' }), true)
+  assert.equal(canUseDocument({ status: 'PARSED', usableForInterview: false }), false)
+  assert.equal(canUseDocument({ status: 'CONFIRMED', usableForInterview: true }), true)
+})
+
+test('document API sends multipart data and uses owner-confirmation gate endpoint', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options })
+    return json({ data: { id: 'doc-1', status: 'PENDING' } })
+  }
+  await createDocument('RESUME', new File(['fixture'], 'resume.pdf', { type: 'application/pdf' }))
+  await updateDocument('QUESTION_BANK', 'bank-1', {
+    title: 'Bank', contentVersion: 2, content: { schemaVersion: 'v1', questions: [] },
+  })
+  await validateInterviewSource('RESUME', 'resume-1')
+  assert.equal(calls[0].url, '/api/v1/resumes')
+  assert.ok(calls[0].options.body instanceof FormData)
+  assert.equal(calls[1].url, '/api/v1/question-banks/bank-1')
+  assert.equal(JSON.parse(calls[1].options.body).contentVersion, 2)
+  assert.equal(calls[2].url, '/api/v1/interview-sources/resumes/resume-1')
+})
+
+test('resume review can edit project details without dropping parsed technologies or outcomes', () => {
+  const original = {
+    schemaVersion: 'interviewmirror.resume-content.v1',
+    projects: [{ name: 'RAG Workbench', technologies: ['Java', 'Spring AI'], outcomes: ['Recall@5 0.92'], sourcePage: 2 }],
+  }
+  const [project] = projectRowsForReview(original.projects)
+  project.name = 'RAG Interview Workbench'
+  project.technologiesText += ', PostgreSQL'
+  project.outcomesText += '\nReduced p95 to 420 ms'
+  const content = buildResumeContent(original, {
+    personalInfo: { name: 'Candidate', email: '', phone: '', location: '' },
+    educationText: '', experienceText: '', projects: [project], skillsText: '', awardsText: '', metricsText: '',
+  })
+  assert.deepEqual(content.projects, [{
+    name: 'RAG Interview Workbench',
+    technologies: ['Java', 'Spring AI', 'PostgreSQL'],
+    outcomes: ['Recall@5 0.92', 'Reduced p95 to 420 ms'],
+    sourcePage: 2,
+  }])
+  assert.deepEqual(content.personalInfo, { name: 'Candidate' })
 })

@@ -102,3 +102,56 @@ export async function downloadFile(id) {
   if (!response.ok) throw new ApiError(response.status, 'FILE_DOWNLOAD_FAILED', '文件下载失败。')
   return response.blob()
 }
+
+function documentPath(type, id = '') {
+  const base = type === 'RESUME' ? '/api/v1/resumes' : '/api/v1/question-banks'
+  return id ? `${base}/${encodeURIComponent(id)}` : base
+}
+
+export async function listDocuments(type, usableOnly = false) {
+  const query = usableOnly ? '?usableOnly=true' : ''
+  return request(`${documentPath(type)}${query}`)
+}
+
+export async function createDocument(type, file) {
+  const form = new FormData()
+  form.set('file', file)
+  return request(documentPath(type), { method: 'POST', body: form })
+}
+
+export async function createQuestionBank(title) {
+  return request(`${documentPath('QUESTION_BANK')}/manual`, {
+    method: 'POST', body: JSON.stringify({ title }),
+  })
+}
+
+export async function getDocument(type, id) {
+  return request(documentPath(type, id))
+}
+
+export async function updateDocument(type, id, { title, contentVersion, content }) {
+  return request(documentPath(type, id), {
+    method: 'PUT', body: JSON.stringify({ title, contentVersion, content }),
+  })
+}
+
+export async function confirmDocument(type, id) {
+  return request(`${documentPath(type, id)}/confirm`, { method: 'POST' })
+}
+
+export async function retryDocument(type, id) {
+  return request(`${documentPath(type, id)}/retry`, { method: 'POST' })
+}
+
+export async function deleteDocument(type, id) {
+  return request(documentPath(type, id), { method: 'DELETE' })
+}
+
+export async function parseTask(id) {
+  return request(`/api/v1/parse-tasks/${encodeURIComponent(id)}`)
+}
+
+export async function validateInterviewSource(type, id) {
+  const route = type === 'RESUME' ? 'resumes' : 'question-banks'
+  return request(`/api/v1/interview-sources/${route}/${encodeURIComponent(id)}`)
+}

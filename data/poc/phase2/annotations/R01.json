@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "R01",
+  "category": "resume",
+  "sha256": "22988e368e4cce6329037a67582f0016c3dd3eee24c15f61ea8ca5660c5fa5d8",
+  "groundTruth": {
+    "fields": {
+      "name": "Candidate-R01",
+      "education": "Bachelor of Computer Science",
+      "skills": "Java, Spring Boot, RAG",
+      "project": "Knowledge Base Q&A",
+      "metric": "Recall@5 0.84"
+    }
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

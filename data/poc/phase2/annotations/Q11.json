@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q11",
+  "category": "question_bank",
+  "sha256": "55ef63c050c85fb32ab8f789aeed57046e8684b347ddaefac56ca3242d966aa2",
+  "groundTruth": {
+    "questions": [
+      "How would you design a reliable document parsing task?",
+      "How do you prevent duplicate worker claims?",
+      "How should an expired task lease be recovered?"
+    ]
+  },
+  "annotationSource": "Synthetic fixture authored for Stage 2; no personal data"
+}

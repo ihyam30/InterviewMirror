@@ -3,7 +3,9 @@ package local.interviewmirror.backend.files;
 import java.io.InputStream;
 import java.util.List;
 import java.util.UUID;
+import local.interviewmirror.backend.common.ApiException;
 import local.interviewmirror.backend.common.ApiResponse;
+import local.interviewmirror.backend.documents.DocumentRepository;
 import local.interviewmirror.backend.security.AccountPrincipal;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.CacheControl;
@@ -11,6 +13,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,8 +28,12 @@ import org.springframework.web.bind.annotation.RequestParam;
 @RequestMapping("/api/v1/files")
 public class FileController {
     private final FileService files;
+    private final DocumentRepository documents;
 
-    public FileController(FileService files) { this.files = files; }
+    public FileController(FileService files, DocumentRepository documents) {
+        this.files = files;
+        this.documents = documents;
+    }
 
     @GetMapping
     ApiResponse<List<FileView>> list(Authentication authentication) {
@@ -57,7 +64,11 @@ public class FileController {
 
     @DeleteMapping("/{id}")
     ApiResponse<Void> delete(Authentication authentication, @PathVariable UUID id) {
-        files.delete(principal(authentication).id(), id);
+        UUID ownerId = principal(authentication).id();
+        if (documents.existsForFile(id, ownerId)) {
+            throw new ApiException(HttpStatus.CONFLICT, "FILE_IN_USE", "该文件属于简历或题库，请从资料页面删除。");
+        }
+        files.delete(ownerId, id);
         return ApiResponse.of(null);
     }
 

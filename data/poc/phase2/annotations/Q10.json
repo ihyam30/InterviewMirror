@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q10",
+  "category": "question_bank",
+  "sha256": "af7d73d13dd90cc6a090b1dc1d6bae66690f6e7d0c884f92b7f79970100ef55c",
+  "groundTruth": {
+    "questions": [
+      "Describe a production incident you investigated.",
+      "What metric proved your fix worked?",
+      "What would you improve in the next iteration?"
+    ]
+  },
+  "annotationSource": "Stage 0 synthetic fixture, hash-verified"
+}

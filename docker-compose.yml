@@ -56,6 +56,10 @@ services:
       S3_BUCKET: ${S3_BUCKET:-interviewmirror-private}
       DEMO1_PASSWORD: ${DEMO1_PASSWORD:-MirrorDemo1!}
       DEMO2_PASSWORD: ${DEMO2_PASSWORD:-MirrorDemo2!}
+      MINERU_WORKER_URL: ${MINERU_WORKER_URL:-http://host.docker.internal:8765}
+      MINERU_WORKER_TOKEN: ${MINERU_WORKER_TOKEN:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     depends_on:

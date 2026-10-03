@@ -1,0 +1,14 @@
+{
+  "schemaVersion": "interviewmirror.phase2-annotation.v1",
+  "sampleId": "Q15",
+  "category": "question_bank",
+  "sha256": "371a50d3170c050144d320e93b950e40ef5c607f1d1c8d9fa617c71a657f69f9",
+  "groundTruth": {
+    "questions": [
+      "How would you recover after the backend restarts?",
+      "How do you measure parsing p95 latency?",
+      "How should parser errors be shown to users?"
+    ]
+  },
+  "annotationSource": "Synthetic fixture authored for Stage 2; no personal data"
+}

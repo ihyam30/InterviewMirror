@@ -40,6 +40,14 @@ interviewmirror:
     access-key: ${S3_ACCESS_KEY:local-dev-access}
     secret-key: ${S3_SECRET_KEY:local-dev-secret-change-me}
     bucket: ${S3_BUCKET:interviewmirror-private}
+  mineru:
+    worker-url: ${MINERU_WORKER_URL:http://host.docker.internal:8765}
+    worker-token: ${MINERU_WORKER_TOKEN:}
+    timeout: ${MINERU_REQUEST_TIMEOUT:PT2M}
+    poll-interval: ${PARSE_POLL_INTERVAL:PT2S}
+    lease: ${PARSE_TASK_LEASE:PT3M}
+    worker-id: ${PARSE_WORKER_ID:local-worker-1}
+    enabled: ${PARSE_WORKER_ENABLED:true}
 
 logging:
   level:
