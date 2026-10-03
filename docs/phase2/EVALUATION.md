@@ -34,12 +34,14 @@ docs/phase2/results/live-evaluation.json       # 去掉随机任务 ID 的可审
 
 所有样本为合成资料，不含真实个人信息。前 20 份复用阶段 0 已 hash 校验的合成 fixtures，另 10 份由版本锁定脚本产生；每个样本都有独立 annotation JSON，包含文件 SHA、字段/题目 ground truth 和来源。新增样本的预期值在样本生成定义中先行确定，不由 MinerU 输出反向生成。
 
+为保证 Windows 与 Linux checkout 结果一致，`.md`、`.txt`、`.json` 文件的 SHA-256 先将 CRLF / LF 统一规范为 CRLF；此规则兼容阶段 0 在 Windows 记录的文本 fixture 哈希。PDF 和 DOCX 按原始二进制字节计算。`test_eval_dataset_hashes.py` 覆盖跨换行一致性和二进制原样哈希。
+
 标注范围说明：这是适合受控解析回归的合成 ground-truth 数据集，并非真实用户简历样本。本次没有独立第二标注者对 30 份材料做盲标或逐条复核，因此评测通过只证明该数据集上的解析表现，不证明真实材料的泛化能力；进入真实用户试用前应由另一位评审独立复核标注并加入明确授权、去标识化的代表性文档。
 
 清单 SHA-256：
 
 ```text
-ac4fa6c67ff3deef5b815a9664b123f19a192dc4b3d7f2e3504c025fe987e5a0
+43746bf24544772fe423311dd3f7982faba2e061e08c3d67bc51937efd39154e
 ```
 
 ## 指标定义

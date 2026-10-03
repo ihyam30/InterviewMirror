@@ -29,7 +29,7 @@ POC = ROOT / "scripts" / "poc"
 sys.path.insert(0, str(POC))
 from score_parser_outputs import match_questions  # noqa: E402
 from poc_runtime import check_runtime  # noqa: E402
-from verify_eval_dataset import main as verify_eval_dataset  # noqa: E402
+from verify_eval_dataset import main as verify_eval_dataset, sha as stable_sha  # noqa: E402
 
 BASE = ROOT / "data" / "poc"
 MANIFEST = BASE / "phase2" / "manifest.json"
@@ -39,7 +39,7 @@ MEDIA = {"pdf": "application/pdf", "docx": "application/vnd.openxmlformats-offic
 
 
 def sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return stable_sha(path)
 
 
 def norm(value: str) -> str:

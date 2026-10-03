@@ -2,7 +2,7 @@
   "schemaVersion": "interviewmirror.phase2-annotation.v1",
   "sampleId": "Q15",
   "category": "question_bank",
-  "sha256": "371a50d3170c050144d320e93b950e40ef5c607f1d1c8d9fa617c71a657f69f9",
+  "sha256": "04111d0c54e0331202b28158b1d84b3c2dd67d6f6f8687903475400ae27432ae",
   "groundTruth": {
     "questions": [
       "How would you recover after the backend restarts?",

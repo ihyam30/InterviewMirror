@@ -10,10 +10,20 @@ ROOT = Path(__file__).resolve().parents[2]
 BASE = ROOT / "data" / "poc"
 MANIFEST = BASE / "phase2" / "manifest.json"
 ANNOTATIONS = BASE / "phase2" / "annotations"
+TEXT_SUFFIXES = {".json", ".md", ".txt"}
+
+
+def sha_bytes(data: bytes, suffix: str) -> str:
+    if suffix.lower() in TEXT_SUFFIXES:
+        # Stage 0 fixture hashes were recorded from Windows CRLF files. Normalize
+        # text to that canonical form so Git's LF checkout on Linux verifies the
+        # same dataset without changing the original Stage 0 sidecar hashes.
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n").replace(b"\n", b"\r\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return sha_bytes(path.read_bytes(), path.suffix)
 
 
 def main() -> int:

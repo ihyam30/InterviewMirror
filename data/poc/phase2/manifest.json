@@ -264,7 +264,7 @@
       ],
       "file": "phase2/samples/Q13.md",
       "source": "Synthetic fixture authored for Stage 2; no personal data",
-      "sha256": "7d805c67550219ff1b4c8e38e6933a4dd8c389b7013e95f585cff4ea77559624",
+      "sha256": "579e2b3e12d1f0bb46891b67e5b41a9ed11d5d59c827380b06e2bf822bde0917",
       "groundTruth": {
         "questions": [
           "How would you evaluate resume field extraction quality?",
@@ -302,7 +302,7 @@
       ],
       "file": "phase2/samples/Q15.txt",
       "source": "Synthetic fixture authored for Stage 2; no personal data",
-      "sha256": "371a50d3170c050144d320e93b950e40ef5c607f1d1c8d9fa617c71a657f69f9",
+      "sha256": "04111d0c54e0331202b28158b1d84b3c2dd67d6f6f8687903475400ae27432ae",
       "groundTruth": {
         "questions": [
           "How would you recover after the backend restarts?",

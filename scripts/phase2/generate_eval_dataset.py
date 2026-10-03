@@ -24,7 +24,10 @@ ANNOTATIONS = ROOT / "data" / "poc" / "phase2" / "annotations"
 
 
 def sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    data = path.read_bytes()
+    if path.suffix.lower() in {".json", ".md", ".txt"}:
+        data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n").replace(b"\n", b"\r\n")
+    return hashlib.sha256(data).hexdigest()
 
 
 def resume_fixture(number: int) -> tuple[dict, str, str]:
@@ -179,9 +182,13 @@ def main() -> None:
     for number in range(1, 11):
         for sample_id, category in ((f"R{number:02d}", "resume"), (f"Q{number:02d}", "question_bank")):
             manifest = json.loads((OLD / f"{sample_id}.manifest.json").read_text(encoding="utf-8"))
+            source_path = OLD / manifest["file"]
+            source_hash = sha(source_path)
+            if source_hash != manifest["sha256"]:
+                raise SystemExit(f"Stage 0 source hash mismatch: {sample_id}")
             samples.append({"sampleId": sample_id, "category": category, "format": manifest["format"],
                             "complexityTags": manifest["complexityTags"], "file": f"samples/{manifest['file']}",
-                            "source": "Stage 0 synthetic fixture, hash-verified", "sha256": manifest["sha256"],
+                            "source": "Stage 0 synthetic fixture, hash-verified", "sha256": source_hash,
                             "groundTruth": manifest["groundTruth"]})
     for number in range(11, 16):
         for spec, body, title in (resume_fixture(number), bank_fixture(number)):
