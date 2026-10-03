@@ -27,6 +27,91 @@ class StructuredDocumentParserTest {
     }
 
     @Test
+    void parsesNumberedQuestionAndAnswerLabelsWithoutTreatingAnswersAsQuestions() {
+        var questions = parser.parse(DocumentType.QUESTION_BANK, """
+                # Java 面试题
+                问题1：什么是线程池？
+                答案1：线程池复用线程并控制并发任务数量。
+                Question 2: How does a bounded queue help a worker service?
+                A2: It limits queued work and applies backpressure when workers are busy.
+                """).path("questions");
+
+        assertEquals(2, questions.size());
+        assertEquals("什么是线程池？", questions.get(0).path("stem").asString());
+        assertEquals("线程池复用线程并控制并发任务数量。", questions.get(0).path("answer").asString());
+        assertEquals("How does a bounded queue help a worker service?", questions.get(1).path("stem").asString());
+        assertEquals("It limits queued work and applies backpressure when workers are busy.",
+                questions.get(1).path("answer").asString());
+    }
+
+    @Test
+    void associatesMultilineAndUnlabelledAnswersWithTheirQuestion() {
+        var questions = parser.parse(DocumentType.QUESTION_BANK, """
+                Q1: What does an idempotency key prevent?
+                It prevents duplicate side effects when a request is retried.
+                The server stores the result for the same key and returns it again.
+
+                Q2: How should a parser report an unsupported file?
+                ## 参考答案2
+                Return a readable error and preserve the original uploaded file.
+                """).path("questions");
+
+        assertEquals(2, questions.size());
+        assertEquals("What does an idempotency key prevent?", questions.get(0).path("stem").asString());
+        assertEquals("It prevents duplicate side effects when a request is retried.\n"
+                        + "The server stores the result for the same key and returns it again.",
+                questions.get(0).path("answer").asString());
+        assertEquals("How should a parser report an unsupported file?", questions.get(1).path("stem").asString());
+        assertEquals("Return a readable error and preserve the original uploaded file.",
+                questions.get(1).path("answer").asString());
+    }
+
+    @Test
+    void keepsNumberedAnswerStepsInsideTheAnswerAndStartsTheNextNumberedQuestion() {
+        var questions = parser.parse(DocumentType.QUESTION_BANK, """
+                1. Java 集合框架
+                参考答案：常用集合包括：
+                1. List，按顺序保存元素。
+                2. Map，按键值对保存数据。
+                2. HashMap 的底层实现是什么？
+                答案：通过数组、链表和红黑树组织键值对。
+                """).path("questions");
+
+        assertEquals(2, questions.size());
+        assertEquals("Java 集合框架", questions.get(0).path("stem").asString());
+        assertTrue(questions.get(0).path("answer").asString().contains("1. List，按顺序保存元素。"));
+        assertTrue(questions.get(0).path("answer").asString().contains("2. Map，按键值对保存数据。"));
+        assertEquals("HashMap 的底层实现是什么？", questions.get(1).path("stem").asString());
+        assertEquals("通过数组、链表和红黑树组织键值对。", questions.get(1).path("answer").asString());
+    }
+
+    @Test
+    void parsesInterviewOralVersionMarkdownAnswersAndKeepsQuestionMarksInAnswerText() {
+        var questions = parser.parse(DocumentType.QUESTION_BANK, """
+                # Java 基础中小厂高频面试题
+                ## 一、Java 语言和基础语法
+                ### 1. Java 有什么特点？为什么能跨平台？【高频】
+                **面试口语版：**
+                Java 的跨平台依赖 JVM 执行平台无关的字节码。
+                1. 通配符 `? extends T` 适合读取，`? super T` 适合写入。
+                ```java
+                Integer value = 10;
+                ```
+                ### 2. JVM、JRE 和 JDK 有什么区别？【高频】
+                **面试口语版：**
+                JVM 负责加载和执行字节码，JRE 提供运行环境，JDK 提供开发工具。
+                """).path("questions");
+
+        assertEquals(2, questions.size());
+        assertEquals("Java 有什么特点？为什么能跨平台？【高频】", questions.get(0).path("stem").asString());
+        assertTrue(questions.get(0).path("answer").asString().contains("Java 的跨平台依赖 JVM"));
+        assertTrue(questions.get(0).path("answer").asString().contains("? extends T"));
+        assertTrue(questions.get(0).path("answer").asString().contains("Integer value = 10;"));
+        assertEquals("JVM、JRE 和 JDK 有什么区别？【高频】", questions.get(1).path("stem").asString());
+        assertTrue(questions.get(1).path("answer").asString().contains("JVM 负责加载和执行字节码"));
+    }
+
+    @Test
     void extractsResumeSectionsAndMultipleProjectsFromMineruMarkdownHeadings() {
         String markdown = """
                 # Synthetic Candidate — Java Intern

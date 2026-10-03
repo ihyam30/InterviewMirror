@@ -72,3 +72,4 @@
 .resume-project-entry + .resume-project-entry{margin-top:12px;padding-top:16px;border-top:1px solid #eceef4}.resume-project-entry .resume-entry-heading{align-items:flex-start;flex-direction:column;gap:2px}.resume-project-entry .resume-entry-heading span{max-width:100%;text-align:left;color:#68748d;font-size:13px}
 .resume-project-highlights{margin-top:8px}.resume-project-highlights>strong{display:block;margin-bottom:3px;color:#596b9f;font-size:12px}.resume-project-highlights ul{margin:0;padding-left:18px}.resume-project-highlights li{padding:2px 0;color:#444853;font-size:14px;line-height:1.8;overflow-wrap:anywhere}
 .resume-skill-entry{padding:0 0 4px}.resume-skill-entry p{margin:0;font-size:14px;font-weight:400;color:#252831}.resume-skill-entry+.resume-skill-entry p:before{content:'• ';font-weight:700;color:#30343e}
+.question-edit-row .question-answer-field{min-height:112px;line-height:1.65;resize:vertical;white-space:pre-wrap}

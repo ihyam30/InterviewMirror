@@ -18,9 +18,13 @@ import tools.jackson.databind.node.ObjectNode;
 @Component
 public class StructuredDocumentParser {
     private static final Pattern NUMBERED_QUESTION = Pattern.compile(
-            "^\\s{0,3}(?:#{1,6}\\s*)?(?:(?:Q|Question|问题|题目)\\s*#?\\s*\\d+\\s*[:.)、|\\-]?|\\d+\\s*[.、)）|\\-])\\s*(.+?)\\s*$", Pattern.CASE_INSENSITIVE);
+            "^\\s{0,3}(?:#{1,6}\\s*)?(?:(?:Q|Question|问题|题目)\\s*#?\\s*\\d+\\s*[:：.)、|\\-]?|\\d+\\s*[.、)）|\\-])\\s*(.+?)\\s*$", Pattern.CASE_INSENSITIVE);
     private static final Pattern SECTION_LABEL = Pattern.compile(
             "^\\s*(?:[-*+]\\s*)?(?:\\*{1,2})?([^:：|]{1,36}?)(?:\\*{1,2})?\\s*[:：|]\\s*(.*?)\\s*$");
+    private static final Pattern QUESTION_LABEL = Pattern.compile(
+            "^\\s*(?:[-*+]\\s*)?(?:\\*{1,2})?(?:问题|题目|question|q)\\s*(?:(?:#|第)?\\s*\\d+)?(?:\\*{1,2})?\\s*[:：|]\\s*(.*?)\\s*$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ANSWER_LABEL = Pattern.compile(
+            "^\\s*(?:[-*+]\\s*)?(?:\\*{1,2})?(?:(?:参考|标准|建议|示例|正确)?答案(?:要点|解析)?|解析|解答|回答|答|suggested answer|sample answer|answer|ans|a)(?:\\s*(?:#|第)?\\s*\\d+)?(?:\\*{1,2})?\\s*[:：|]\\s*(.*?)\\s*$", Pattern.CASE_INSENSITIVE);
     private static final Pattern MARKDOWN_HEADING = Pattern.compile("^\\s{0,3}(#{1,6})\\s+(.+?)\\s*#*\\s*$");
     private static final Pattern HTML_TABLE_ROW = Pattern.compile("(?is)<tr\\b[^>]*>(.*?)</tr>");
     private static final Pattern HTML_TABLE_CELL = Pattern.compile("(?is)<t[dh]\\b[^>]*>(.*?)</t[dh]>");
@@ -37,7 +41,10 @@ public class StructuredDocumentParser {
     private static final Set<String> EXPERIENCE_LABELS = Set.of("experience", "experiences", "work", "工作经历", "实习经历", "工作/实习经历");
     private static final Set<String> AWARD_LABELS = Set.of("awards", "award", "honors", "荣誉", "荣誉奖项", "奖项", "获奖经历");
     private static final Set<String> QUESTION_HEADERS = Set.of("question", "questions", "题目", "问题", "题干", "面试问题");
-    private static final Set<String> ANSWER_HEADERS = Set.of("answer", "suggested answer", "答案", "参考答案");
+    private static final Set<String> ANSWER_HEADERS = Set.of(
+            "answer", "suggested answer", "答案", "参考答案", "标准答案", "建议答案", "示例答案", "正确答案", "答案要点", "答案解析", "解答", "解析");
+    private static final Set<String> ANSWER_HEADING_LABELS = Set.of(
+            "answer", "suggestedanswer", "sampleanswer", "ans", "a", "答案", "参考答案", "标准答案", "建议答案", "示例答案", "正确答案", "答案要点", "答案解析", "解析", "解答", "回答", "答", "面试口语版");
     private static final Set<String> CATEGORY_HEADERS = Set.of("category", "分类", "类型", "主题");
     private static final Pattern EMAIL = Pattern.compile("[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}", Pattern.CASE_INSENSITIVE);
     private static final Pattern PHONE = Pattern.compile("(?<!\\d)(?:\\+?86[ -]?)?1[3-9]\\d{9}(?!\\d)");
@@ -370,9 +377,51 @@ public class StructuredDocumentParser {
         int answerColumn = -1;
         int categoryColumn = -1;
         boolean questionTable = false;
+        boolean questionContext = false;
+        boolean answerStarted = false;
+        boolean explicitAnswerContext = false;
 
         for (SourceLine line : lines) {
             String trimmed = line.text().trim();
+            if (trimmed.isBlank()) continue;
+
+            Matcher answerHeading = MARKDOWN_HEADING.matcher(trimmed);
+            if (answerHeading.matches() && isAnswerHeading(answerHeading.group(2))) {
+                questionContext = !found.isEmpty();
+                answerStarted = questionContext;
+                explicitAnswerContext = questionContext;
+                continue;
+            }
+            if (isAnswerHeading(trimmed)) {
+                questionContext = !found.isEmpty();
+                answerStarted = questionContext;
+                explicitAnswerContext = questionContext;
+                continue;
+            }
+
+            Matcher labelledAnswer = ANSWER_LABEL.matcher(trimmed);
+            if (labelledAnswer.matches()) {
+                if (!found.isEmpty()) {
+                    appendQuestionAnswer(found, labelledAnswer.group(1));
+                    questionContext = true;
+                    answerStarted = true;
+                    explicitAnswerContext = true;
+                }
+                continue;
+            }
+
+            Matcher labelledQuestion = QUESTION_LABEL.matcher(trimmed);
+            if (labelledQuestion.matches()) {
+                String stem = clean(labelledQuestion.group(1));
+                if (isQuestionText(stem)) {
+                    found.add(new Question(stem, "", "", line.number()));
+                    questionContext = true;
+                    answerStarted = false;
+                    explicitAnswerContext = false;
+                }
+                continue;
+            }
+
             Matcher htmlRows = HTML_TABLE_ROW.matcher(trimmed);
             if (htmlRows.find()) {
                 do {
@@ -393,6 +442,9 @@ public class StructuredDocumentParser {
                             String category = categoryColumn >= 0 && categoryColumn < htmlCells.size()
                                     ? htmlCells.get(categoryColumn) : "";
                             found.add(new Question(stem, answer, category, line.number()));
+                            questionContext = true;
+                            answerStarted = !answer.isBlank();
+                            explicitAnswerContext = !answer.isBlank();
                         }
                     }
                 } while (htmlRows.find());
@@ -413,6 +465,9 @@ public class StructuredDocumentParser {
                         String answer = answerColumn >= 0 && answerColumn < cells.size() ? clean(cells.get(answerColumn)) : "";
                         String category = categoryColumn >= 0 && categoryColumn < cells.size() ? clean(cells.get(categoryColumn)) : "";
                         found.add(new Question(stem, answer, category, line.number()));
+                        questionContext = true;
+                        answerStarted = !answer.isBlank();
+                        explicitAnswerContext = !answer.isBlank();
                         continue;
                     }
                 }
@@ -427,20 +482,35 @@ public class StructuredDocumentParser {
             Matcher numbered = NUMBERED_QUESTION.matcher(trimmed);
             if (numbered.matches()) {
                 String stem = clean(numbered.group(1));
-                if (isQuestionText(stem)) found.add(new Question(stem, "", "", line.number()));
-                continue;
-            }
-
-            Matcher labelled = SECTION_LABEL.matcher(trimmed);
-            if (labelled.matches() && ANSWER_HEADERS.contains(normalize(labelled.group(1)))) {
-                if (!found.isEmpty()) {
-                    Question previous = found.removeLast();
-                    found.add(new Question(previous.stem(), clean(labelled.group(2)), previous.category(), previous.lineNumber()));
+                if (isQuestionText(stem)) {
+                    if (isMarkdownNumberedQuestionHeading(trimmed) || !questionContext
+                            || hasExplicitQuestionPrefix(trimmed)
+                            || (!explicitAnswerContext && looksLikeQuestion(stem))
+                            || (!answerStarted && isNextQuestionNumber(trimmed, found))
+                            || (explicitAnswerContext && isNextQuestionNumber(trimmed, found)
+                                    && looksLikeQuestion(stem))) {
+                        found.add(new Question(stem, "", "", line.number()));
+                        questionContext = true;
+                        answerStarted = false;
+                        explicitAnswerContext = false;
+                    } else {
+                        appendQuestionAnswer(found, trimmed);
+                        answerStarted = true;
+                    }
                 }
                 continue;
             }
-            if (isQuestionText(trimmed) && trimmed.length() <= 300) {
-                found.add(new Question(clean(trimmed), "", "", line.number()));
+
+            if (isQuestionText(trimmed) && trimmed.length() <= 500) {
+                if (!explicitAnswerContext && looksLikeQuestion(trimmed)) {
+                    found.add(new Question(clean(trimmed), "", "", line.number()));
+                    questionContext = true;
+                    answerStarted = false;
+                    explicitAnswerContext = false;
+                } else if (questionContext) {
+                    appendQuestionAnswer(found, trimmed);
+                    answerStarted = true;
+                }
             }
         }
 
@@ -570,6 +640,51 @@ public class StructuredDocumentParser {
         return !QUESTION_HEADERS.contains(normalize(text)) && !ANSWER_HEADERS.contains(normalize(text))
                 && !normalized.matches("[0-9#]+") && !normalized.startsWith("syntheticfixture")
                 && !normalized.matches("(?:synthetic)?(?:custom)?questionbank(?:q?\\d+)?");
+    }
+
+    private static boolean hasExplicitQuestionPrefix(String value) {
+        return value != null && value.matches("(?i)^\\s{0,3}(?:#{1,6}\\s*)?(?:Q|Question|问题|题目)\\s*#?\\s*\\d+.*");
+    }
+
+    private static boolean isMarkdownNumberedQuestionHeading(String value) {
+        return value != null && value.matches("^\\s{0,3}#{1,6}\\s+\\d+\\s*[.、)）|\\-]\\s*.+$");
+    }
+
+    private static boolean isNextQuestionNumber(String value, List<Question> questions) {
+        Matcher numbered = Pattern.compile("^\\s{0,3}(?:#{1,6}\\s*)?(\\d+)\\s*[.、)）|\\-].*").matcher(value);
+        if (!numbered.matches()) return false;
+        try {
+            return Integer.parseInt(numbered.group(1)) == questions.size() + 1;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+    }
+
+    private static boolean isAnswerHeading(String value) {
+        String key = normalize(value);
+        return ANSWER_HEADING_LABELS.contains(key)
+                || key.matches("(?:参考|标准|建议|示例|正确)?答案(?:要点|解析)?\\d+")
+                || key.matches("(?:suggestedanswer|sampleanswer|answer|ans|a)\\d+");
+    }
+
+    private static boolean looksLikeQuestion(String value) {
+        String text = clean(value);
+        if (text.contains("?") || text.contains("？")) return true;
+        if (text.matches("(?i)^(?:how|what|why|when|where|which|who|whom|whose|can|could|would|should|do|does|did|is|are|was|were|describe|explain|compare|design|discuss|tell|introduce|outline|walk me through|please describe|please explain)\\b.*")) {
+            return true;
+        }
+        if (text.matches("^(?:请问|请你|请|如何|怎样|怎么|什么|为什么|为何|哪些|哪种|是否|能否|可否|描述|解释|比较|设计|讨论|介绍|举例|简述|谈谈|说说|分析|说明|阐述|实现|试说明|试述).+")) {
+            return true;
+        }
+        return text.matches("^(?:你|你们|候选人).{0,24}(?:如何|怎样|怎么|什么|为什么|为何|哪些|哪种|是否|能否|可否|介绍|描述|解释|比较|设计|实现).*");
+    }
+
+    private static void appendQuestionAnswer(List<Question> questions, String raw) {
+        String answer = clean(raw);
+        if (questions.isEmpty() || answer.isBlank()) return;
+        Question previous = questions.removeLast();
+        String combined = previous.answer().isBlank() ? answer : previous.answer() + "\n" + answer;
+        questions.add(new Question(previous.stem(), combined, previous.category(), previous.lineNumber()));
     }
 
     private static String clean(String value) {
