@@ -69,6 +69,10 @@ public class DocumentParseWorker {
             }
             String markdown = parser.parse(stored.originalFilename(), stored.contentType(), bytes);
             var structured = structuredParser.parse(document.type(), markdown);
+            if (document.type() == DocumentType.RESUME && !structuredParser.hasUsableResumeContent(structured)) {
+                throw new DocumentParseException("RESUME_CONTENT_NOT_RECOGNIZED",
+                        "文件文字已提取，但没有识别到简历结构内容；请确认版式清晰，或重新上传 PDF/DOCX。");
+            }
             String serialized = json.writeValueAsString(structured);
             if (!documents.complete(task.id(), task.documentId(), task.ownerId(), serialized, startedAt,
                     task.workerId(), task.attemptCount())) {

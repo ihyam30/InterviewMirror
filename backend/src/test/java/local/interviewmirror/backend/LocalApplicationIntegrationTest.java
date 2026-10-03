@@ -192,6 +192,24 @@ class LocalApplicationIntegrationTest {
     }
 
     @Test
+    void resumeWithExtractedTextButNoRecognizedSectionsFailsInsteadOfShowingEmptySuccess() throws Exception {
+        Session a = login("demo1", "MirrorDemo1!");
+        JsonNode uploaded = uploadDocument("/api/v1/resumes", "empty-structure.pdf", "application/pdf", a);
+        UUID id = UUID.fromString(uploaded.path("id").asText());
+        UUID taskId = UUID.fromString(uploaded.path("parseTask").path("id").asText());
+
+        org.junit.jupiter.api.Assertions.assertTrue(parseWorker.processOne());
+
+        mvc.perform(get("/api/v1/resumes/" + id).session(a.session())).andExpect(status().isOk())
+                .andExpect(content().json("""
+                        {"data":{"status":"FAILED","parseTask":{"status":"FAILED","errorCode":"RESUME_CONTENT_NOT_RECOGNIZED",
+                        "errorMessage":"文件文字已提取，但没有识别到简历结构内容；请确认版式清晰，或重新上传 PDF/DOCX。"}}}
+                        """, false));
+        mvc.perform(get("/api/v1/parse-tasks/" + taskId).session(a.session())).andExpect(status().isOk())
+                .andExpect(content().json("{\"data\":{\"status\":\"FAILED\"}}", false));
+    }
+
+    @Test
     void questionBankLifecycleSupportsEditConfirmRetryAndRecovery() throws Exception {
         Session a = login("demo1", "MirrorDemo1!");
         JsonNode uploaded = uploadDocument("/api/v1/question-banks", "bank.md", "text/markdown", a);
@@ -351,6 +369,7 @@ class LocalApplicationIntegrationTest {
             if (failures.getAndUpdate(current -> current > 0 ? current - 1 : 0) > 0) {
                 throw new local.interviewmirror.backend.documents.DocumentParseException("TEST_FAILURE", "测试解析失败");
             }
+            if (filename.contains("empty-structure")) return "# Resume\nNo recognized resume fields in this fixture.";
             if (filename.contains("bank")) {
                 return "# Questions\n| # | Question |\n|---|---|\n| 1 | How do you validate model output quality? |";
             }

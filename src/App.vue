@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { currentUser as fetchCurrentUser, confirmDocument, createDocument, createQuestionBank, deleteDocument, downloadFile, getDocument, listDocuments, login as apiLogin, logout as apiLogout, retryDocument, updateDocument, validateInterviewSource } from './api.js'
 import { canReviewDocument, canRetryDocument, documentStatusLabel } from './document-state.js'
-import { buildResumeContent, projectRowsForReview, textLines } from './document-content.js'
+import { resumeViewModel } from './resume-display.js'
 
 const navItems = [
   { id: 'home', label: '工作台', icon: 'home' },
@@ -68,7 +68,10 @@ const resumes = ref([])
 const banks = ref([])
 const reports = ref([...seedReports])
 const page = ref('home')
-const selectedNav = computed(() => (['reportDetail', 'gapDetail'].includes(page.value) ? 'reports' : page.value))
+const selectedNav = computed(() => (['reportDetail', 'gapDetail'].includes(page.value) ? 'reports' : page.value === 'resumeDetail' ? 'resumes' : page.value))
+const selectedResumeDetailId = ref(null)
+const activeResume = computed(() => resumes.value.find((resume) => resume.id === selectedResumeDetailId.value) ?? null)
+const activeResumeView = computed(() => activeResume.value ? resumeViewModel(activeResume.value.content, activeResume.value.name) : null)
 const selectedReportId = ref(reports.value[0]?.id ?? null)
 const currentReport = computed(() => reports.value.find((report) => report.id === selectedReportId.value) ?? reports.value[0])
 const mode = ref('COMPREHENSIVE')
@@ -195,7 +198,8 @@ const pageHeading = computed(() => ({
   reportDetail: ['面试复盘', '把表现拆解清楚，让下一次准备更有方向。'],
   gapDetail: ['岗位差异分析', '从岗位要求、简历证据和面试表现中定位差距。'],
   banks: ['自定义题库', '整理你的题目，在专项面试中逐题练习。'],
-  resumes: ['我的简历', '确认简历信息后，AI 才会用它生成个性化问题。'],
+  resumes: ['我的简历', '查看解析后的简历内容，确认后即可用于综合面试。'],
+  resumeDetail: ['简历详情', '查看本地解析出的简历内容与个人经历。'],
 }[page.value] ?? ['工作台', '']))
 
 const comprehensiveCount = computed(() => reports.value.filter((report) => report.mode === '综合面试').length)
@@ -402,10 +406,13 @@ function pollDocument(type, id) {
       }
       parseTimers.delete(id)
       if (document.status === 'PARSED') {
-        showToast('解析完成，请检查并确认资料')
-        openDocumentReview(type, document)
+        if (type === 'RESUME') showToast('简历解析完成，可查看内容并确认使用')
+        else {
+          showToast('题库解析完成，请检查并确认资料')
+          openDocumentReview(type, document)
+        }
       } else if (document.status === 'FAILED') {
-        showToast(document.parseTask?.errorMessage || '解析失败，可重试或手动编辑')
+        showToast(document.parseTask?.errorMessage || '解析失败，可重新解析')
       }
     } catch (error) {
       parseTimers.delete(id)
@@ -416,18 +423,12 @@ function pollDocument(type, id) {
 }
 
 function openDocumentReview(type, document) {
+  if (type === 'RESUME' || type === 'resume') return showToast('简历内容采用只读预览，请从简历卡片打开')
   if (!canReviewDocument(document)) return showToast(documentStatusLabel(document.status))
-  const documentMode = type === 'RESUME' || type === 'resume' ? 'resume' : 'bank'
   const content = structuredClone(document.content || {})
-  const info = content.personalInfo || {}
   pendingReview.value = {
-    id: document.id, type: documentMode, name: document.title, fileId: document.fileId,
+    id: document.id, type: 'bank', name: document.title, fileId: document.fileId,
     contentVersion: document.contentVersion, content,
-    personalInfo: { name: info.name || '', email: info.email || '', phone: info.phone || '', location: info.location || '' },
-    educationText: textLines(content.education), experienceText: textLines(content.experiences),
-    projects: projectRowsForReview(content.projects),
-    skillsText: textLines(content.skills),
-    awardsText: textLines(content.awards), metricsText: textLines(content.metrics),
     questions: Array.isArray(content.questions) ? content.questions.map((item, index) => ({
       position: index + 1, stem: item.stem || '', answer: item.answer || '', category: item.category || '',
     })) : [],
@@ -440,6 +441,25 @@ async function openDocument(type, document) {
     const detail = await getDocument(type, document.id)
     replaceDocument(type, detail)
     openDocumentReview(type, detail)
+  } catch (error) { showToast(error.message) }
+}
+
+async function openResumeDetails(resume) {
+  if (!['PARSED', 'CONFIRMED'].includes(resume.status)) return showToast(documentStatusLabel(resume.status))
+  try {
+    const detail = await getDocument('RESUME', resume.id)
+    replaceDocument('RESUME', detail)
+    selectedResumeDetailId.value = detail.id
+    page.value = 'resumeDetail'
+  } catch (error) { showToast(error.message) }
+}
+
+async function confirmResume(resume) {
+  try {
+    const confirmed = await confirmDocument('RESUME', resume.id)
+    replaceDocument('RESUME', confirmed)
+    selectedResumeId.value = resume.id
+    showToast('简历已确认，可用于综合面试')
   } catch (error) { showToast(error.message) }
 }
 
@@ -469,29 +489,18 @@ function removeQuestion(index) {
   pendingReview.value?.questions.splice(index, 1)
 }
 
-function addProject() {
-  pendingReview.value?.projects.push({ original: {}, name: '', technologiesText: '', outcomesText: '' })
-}
-
-function removeProject(index) {
-  pendingReview.value?.projects.splice(index, 1)
-}
-
 function buildReviewedContent(draft) {
-  if (draft.type === 'bank') {
-    const questions = draft.questions.map((item, index) => ({
-      position: index + 1, stem: item.stem.trim(), answer: item.answer.trim(),
-      ...(item.category.trim() ? { category: item.category.trim() } : {}),
-    })).filter((item) => item.stem)
-    return { schemaVersion: 'interviewmirror.question-bank-content.v1', questions }
-  }
-  return buildResumeContent(draft.content, draft)
+  const questions = draft.questions.map((item, index) => ({
+    position: index + 1, stem: item.stem.trim(), answer: item.answer.trim(),
+    ...(item.category.trim() ? { category: item.category.trim() } : {}),
+  })).filter((item) => item.stem)
+  return { schemaVersion: 'interviewmirror.question-bank-content.v1', questions }
 }
 
 async function saveReviewedDocument(alsoConfirm = false) {
   const draft = pendingReview.value
   if (!draft) return
-  const type = draft.type === 'resume' ? 'RESUME' : 'QUESTION_BANK'
+  const type = 'QUESTION_BANK'
   try {
     const saved = await updateDocument(type, draft.id, {
       title: draft.name,
@@ -860,11 +869,56 @@ function resetDemo() {
 
         <template v-else-if="page === 'resumes'">
           <div class="page-intro"><div><span class="section-kicker">YOUR CAREER STORY</span><h1>我的简历</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" @click="openResumePicker">＋ 上传简历</button></div>
-          <div class="resume-private-note"><span>◇</span><p><strong>本地私有资料</strong> 原始文件保存在账号私有对象空间；MinerU 在本机异步提取结构化简历信息，只有确认后的版本才能用于综合面试。</p></div>
-          <div class="resume-layout"><section class="resume-list-column"><div class="library-toolbar resume-toolbar"><div class="library-tabs"><button class="active">全部简历 <span>{{ resumes.length }}</span></button></div><span class="sort-select">最近更新 <b>⌄</b></span></div>
-              <div v-if="resumes.length" class="resume-list"> <article v-for="resume in resumes" :key="resume.id" class="resume-card" :class="{ 'resume-default': resume.id === selectedResumeId && resume.ready }"><div class="resume-file-preview"><span class="pdf-ribbon">{{ resume.format === 'DOCX' ? 'DOC' : resume.format }}</span><div class="preview-monogram">镜<br /><small>简历</small></div><i></i><i></i><i class="preview-short"></i><i></i></div><div class="resume-card-body"><div class="resume-title-row"><div><h3>{{ resume.name }}</h3><span class="document-status" :class="resume.status.toLowerCase()"><i></i>{{ resume.statusLabel }}</span><span v-if="resume.id === selectedResumeId && resume.ready" class="default-tag">本次已选</span></div><button class="more-button" @click="deleteResume(resume)" title="删除简历">···</button></div><div class="resume-meta-line"><span>{{ resume.size }}</span><i>·</i><span>{{ resume.projects }} 段项目经历</span><i>·</i><span>{{ resume.updated }} 更新</span></div><div class="resume-skills"><span v-for="skill in resume.skills.split('、').filter(Boolean).slice(0, 4)" :key="skill">{{ skill }}</span><small v-if="!resume.skills">尚未提取技能</small></div><div v-if="resume.project" class="resume-project"><small>项目摘要</small><p>{{ resume.project }}</p></div><div class="resume-card-actions"><button v-if="resume.status === 'PARSED' || resume.status === 'CONFIRMED'" class="subtle-button" @click="openDocument('RESUME', resume)">预览 / 编辑</button><button v-if="resume.status === 'FAILED'" class="subtle-button" @click="retryParsing('RESUME', resume)">重新解析</button><button v-if="resume.fileId" class="text-button" @click="downloadOwnedFile(resume.fileId, resume.fileName || resume.name)">下载原文件</button><button v-if="resume.ready" class="text-button" @click="setDefaultResume(resume)">选择用于面试</button></div></div></article></div>
-              <div v-else class="empty-state"><span>▤</span><strong>上传一份简历，开始你的第一场综合面试</strong><button class="primary-button" @click="openResumePicker">上传简历</button></div>
-            </section><aside class="resume-aside"><div class="panel resume-aside-card"><span class="section-kicker">A GOOD START</span><h3>让经历成为你的回答线索</h3><p>简历中的项目、技术选择和结果，会成为综合面试追问的起点。</p><div class="resume-aside-illustration"><span class="resume-paper"><i></i><i></i><i></i><b>✦</b></span><span class="resume-sun"></span></div><div class="aside-check"><span>✓</span> 上传后先检查解析结果</div><div class="aside-check"><span>✓</span> 修正错漏后再确认使用</div><div class="aside-check"><span>✓</span> 只在综合面试中关联简历</div></div></aside></div>
+          <div class="resume-private-note"><span>◇</span><p><strong>本地私有资料</strong> 简历会在本机解析。解析完成后可查看结构化内容；确认后才能用于综合面试。</p></div>
+          <div class="library-toolbar resume-toolbar"><div class="library-tabs"><button class="active">全部简历 <span>{{ resumes.length }}</span></button></div><span class="sort-select">最近更新 <b>⌄</b></span></div>
+          <div v-if="resumes.length" class="resume-list">
+            <article v-for="resume in resumes" :key="resume.id" class="resume-card" :class="{ 'resume-default': resume.id === selectedResumeId && resume.ready }">
+              <div class="resume-thumb-wrap">
+                <div v-if="resume.status === 'PARSED' || resume.status === 'CONFIRMED'" class="resume-thumb">
+                  <div class="resume-thumb-person"><strong>{{ resumeViewModel(resume.content, resume.name).name }}</strong><small>{{ resumeViewModel(resume.content, resume.name).contact.slice(0, 2).join('　') || '个人简历' }}</small></div>
+                  <section v-for="section in resumeViewModel(resume.content, resume.name).previewSections" :key="section.title" class="resume-thumb-section"><h4>{{ section.title }}</h4><p v-for="line in section.lines" :key="line">{{ line }}</p></section>
+                </div>
+                <div v-else class="resume-thumb-state" :class="resume.status.toLowerCase()"><span>{{ resume.status === 'FAILED' ? '!' : '⋯' }}</span><strong>{{ resume.statusLabel }}</strong><small>{{ resume.status === 'FAILED' ? (resume.parseTask?.errorMessage || '解析未完成，请重试') : '解析完成后可查看简历内容' }}</small></div>
+                <span class="pdf-ribbon">{{ resume.format === 'DOCX' ? 'DOC' : resume.format }}</span>
+              </div>
+              <div class="resume-card-body">
+                <div class="resume-title-row"><div><h3>{{ resume.name }}</h3><span class="document-status" :class="resume.status.toLowerCase()"><i></i>{{ resume.statusLabel }}</span><span v-if="resume.id === selectedResumeId && resume.ready" class="default-tag">本次已选</span></div><button class="more-button" @click="deleteResume(resume)" title="删除简历">···</button></div>
+                <div class="resume-meta-line"><span>{{ resume.updated }}</span><i>·</i><span>{{ resume.projects }} 段项目经历</span></div>
+                <div class="resume-card-actions">
+                  <button v-if="resume.status === 'PARSED' || resume.status === 'CONFIRMED'" class="resume-view-button" @click="openResumeDetails(resume)">查看简历 <span>→</span></button>
+                  <button v-if="resume.status === 'FAILED'" class="subtle-button" @click="retryParsing('RESUME', resume)">重新解析</button>
+                  <button v-if="resume.fileId" class="text-button" @click="downloadOwnedFile(resume.fileId, resume.fileName || resume.name)">原文件</button>
+                  <button v-if="resume.ready && resume.id !== selectedResumeId" class="text-button" @click="setDefaultResume(resume)">用于面试</button>
+                </div>
+              </div>
+            </article>
+            <button class="resume-add-card" @click="openResumePicker"><span>＋</span><strong>上传另一份简历</strong><small>支持 PDF 或 DOCX，最大 20MB</small></button>
+          </div>
+          <div v-else class="empty-state library-empty"><span>▤</span><strong>还没有简历</strong><p>上传 PDF 或 DOCX，解析后即可查看结构化内容。</p><button class="primary-button" @click="openResumePicker">上传简历</button></div>
+        </template>
+
+        <template v-else-if="page === 'resumeDetail'">
+          <div v-if="activeResume && activeResumeView" class="resume-detail-page">
+            <div class="resume-detail-toolbar"><button class="text-button" @click="page = 'resumes'">← 返回我的简历</button><div class="resume-detail-toolbar-actions"><span class="document-status" :class="activeResume.status.toLowerCase()"><i></i>{{ activeResume.statusLabel }}</span><button v-if="activeResume.fileId" class="subtle-button" @click="downloadOwnedFile(activeResume.fileId, activeResume.fileName || activeResume.name)">下载原文件</button><button v-if="activeResume.ready && activeResume.id !== selectedResumeId" class="subtle-button" @click="setDefaultResume(activeResume)">用于面试</button><button v-if="activeResume.status === 'PARSED'" class="primary-button" @click="confirmResume(activeResume)">确认并用于面试 <span>→</span></button></div></div>
+            <div v-if="activeResume.status === 'PARSED'" class="resume-confirm-hint"><span>◇</span> 以下为系统解析内容。无需编辑；确认后可用于综合面试。</div>
+            <article class="resume-document">
+              <header class="resume-document-heading"><h1>{{ activeResumeView.name }}</h1><div v-if="activeResumeView.role" class="resume-document-role">{{ activeResumeView.role }}</div><div v-if="activeResumeView.contact.length" class="resume-document-contact"><span v-for="item in activeResumeView.contact" :key="item">{{ item }}</span></div></header>
+              <section v-for="section in activeResumeView.sections" :key="section.title" class="resume-document-section">
+                <h2>{{ section.title }}</h2>
+                <article v-for="(item, index) in section.items" :key="`${section.title}-${index}`" class="resume-document-entry" :class="{ 'resume-project-entry': section.title === '项目经历', 'resume-skill-entry': section.title === '专业技能' }">
+                  <div v-if="item.title || item.subtitle" class="resume-entry-heading"><strong>{{ item.title }}</strong><span v-if="item.subtitle">{{ item.subtitle }}</span></div>
+                  <p v-for="(line, lineIndex) in item.body" :key="`body-${lineIndex}`">{{ line }}</p>
+                  <div v-if="section.title === '项目经历' && item.highlights?.length" class="resume-project-highlights">
+                    <strong>项目亮点</strong>
+                    <ul><li v-for="(line, lineIndex) in item.highlights" :key="`highlight-${lineIndex}`">{{ line }}</li></ul>
+                  </div>
+                </article>
+              </section>
+              <div v-if="!activeResumeView.sections.length" class="resume-no-content"><strong>暂未提取到结构化简历内容</strong><p>可以重新解析原文件，或确认前先下载原文件核对。</p></div>
+              <footer class="resume-document-footer">由 InterviewMirror 本地解析 · {{ activeResume.updated }}</footer>
+            </article>
+          </div>
+          <div v-else class="empty-state"><strong>没有找到这份简历</strong><button class="subtle-button" @click="page = 'resumes'">返回我的简历</button></div>
         </template>
       </div>
     </main>
@@ -875,24 +929,11 @@ function resetDemo() {
     <div v-if="toast" class="toast-message"><span>✓</span>{{ toast }}</div>
 
     <div v-if="reviewDialog && pendingReview" class="dialog-scrim" @click.self="cancelReview">
-      <section class="review-dialog" role="dialog" aria-modal="true" :aria-label="pendingReview.type === 'resume' ? '确认简历解析结果' : '确认题库解析结果'">
-        <div class="dialog-top"><div><span class="section-kicker">REVIEW BEFORE USE</span><h2>{{ pendingReview.type === 'resume' ? '检查并编辑简历' : '检查并编辑题库' }}</h2><p>来源文件已完成本地解析。保存修改后需再次确认，才能用于面试。</p></div><button class="dialog-close" aria-label="稍后检查" @click="cancelReview">×</button></div>
-        <template v-if="pendingReview.type === 'resume'">
-          <label class="field-label">资料名称</label><input v-model="pendingReview.name" class="text-field" />
-          <div class="resume-edit-grid"><label><span class="field-label">姓名</span><input v-model="pendingReview.personalInfo.name" class="text-field" /></label><label><span class="field-label">邮箱</span><input v-model="pendingReview.personalInfo.email" class="text-field" /></label><label><span class="field-label">电话</span><input v-model="pendingReview.personalInfo.phone" class="text-field" /></label><label><span class="field-label">所在地</span><input v-model="pendingReview.personalInfo.location" class="text-field" /></label></div>
-          <label class="field-label dialog-field-label">教育经历（每行一项）</label><textarea v-model="pendingReview.educationText" class="text-field dialog-textarea"></textarea>
-          <label class="field-label dialog-field-label">工作 / 实习经历（每行一项）</label><textarea v-model="pendingReview.experienceText" class="text-field dialog-textarea"></textarea>
-          <div class="question-review-heading dialog-field-label"><span class="field-label">项目经历</span><button class="text-button" @click="addProject">＋ 添加项目</button></div>
-          <div class="question-review-list"><div v-for="(project, index) in pendingReview.projects" :key="index" class="question-edit-row resume-project-row"><span>{{ String(index + 1).padStart(2, '0') }}</span><div><input v-model="project.name" class="text-field" placeholder="项目名称" /><textarea v-model="project.technologiesText" class="text-field" placeholder="技术栈（逗号分隔）"></textarea><textarea v-model="project.outcomesText" class="text-field" placeholder="项目成果（每行一项）"></textarea></div><button @click="removeProject(index)" title="删除项目">×</button></div></div>
-          <label class="field-label dialog-field-label">技能关键词</label><textarea v-model="pendingReview.skillsText" class="text-field dialog-textarea"></textarea>
-          <label class="field-label dialog-field-label">量化结果（每行一项）</label><textarea v-model="pendingReview.metricsText" class="text-field dialog-textarea"></textarea>
-          <label class="field-label dialog-field-label">奖项 / 荣誉（每行一项）</label><textarea v-model="pendingReview.awardsText" class="text-field dialog-textarea"></textarea>
-        </template>
-        <template v-else>
-          <label class="field-label">题库名称</label><input v-model="pendingReview.name" class="text-field" />
-          <div class="question-review-heading"><span class="field-label">解析出的题目</span><button class="text-button" @click="addQuestion">＋ 添加问题</button></div>
-          <div class="question-review-list"><div v-for="(question, index) in pendingReview.questions" :key="index" class="question-edit-row"><span>{{ String(index + 1).padStart(2, '0') }}</span><div><textarea v-model="question.stem" class="text-field" placeholder="题目"></textarea><input v-model="question.answer" class="text-field" placeholder="参考答案（可选）" /><input v-model="question.category" class="text-field" placeholder="分类（可选）" /></div><button @click="removeQuestion(index)" title="删除问题">×</button></div></div>
-        </template>
+      <section class="review-dialog" role="dialog" aria-modal="true" aria-label="确认题库解析结果">
+        <div class="dialog-top"><div><span class="section-kicker">REVIEW BEFORE USE</span><h2>检查并编辑题库</h2><p>来源文件已完成本地解析。保存修改后需再次确认，才能用于面试。</p></div><button class="dialog-close" aria-label="稍后检查" @click="cancelReview">×</button></div>
+        <label class="field-label">题库名称</label><input v-model="pendingReview.name" class="text-field" />
+        <div class="question-review-heading"><span class="field-label">解析出的题目</span><button class="text-button" @click="addQuestion">＋ 添加问题</button></div>
+        <div class="question-review-list"><div v-for="(question, index) in pendingReview.questions" :key="index" class="question-edit-row"><span>{{ String(index + 1).padStart(2, '0') }}</span><div><textarea v-model="question.stem" class="text-field" placeholder="题目"></textarea><input v-model="question.answer" class="text-field" placeholder="参考答案（可选）" /><input v-model="question.category" class="text-field" placeholder="分类（可选）" /></div><button @click="removeQuestion(index)" title="删除问题">×</button></div></div>
         <div class="dialog-footnote"><span>◇</span> 原始文件和解析结果仅对当前账号可见；未确认的资料不会被面试来源接口接受。</div>
         <div class="dialog-actions"><button class="subtle-button" @click="cancelReview">稍后检查</button><button class="subtle-button" @click="saveReviewedDocument(false)">保存修改</button><button class="primary-button" @click="confirmReview">保存并确认 <span>→</span></button></div>
       </section>

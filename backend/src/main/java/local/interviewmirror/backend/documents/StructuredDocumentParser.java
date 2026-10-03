@@ -21,15 +21,21 @@ public class StructuredDocumentParser {
             "^\\s{0,3}(?:#{1,6}\\s*)?(?:(?:Q|Question|问题|题目)\\s*#?\\s*\\d+\\s*[:.)、|\\-]?|\\d+\\s*[.、)）|\\-])\\s*(.+?)\\s*$", Pattern.CASE_INSENSITIVE);
     private static final Pattern SECTION_LABEL = Pattern.compile(
             "^\\s*(?:[-*+]\\s*)?(?:\\*{1,2})?([^:：|]{1,36}?)(?:\\*{1,2})?\\s*[:：|]\\s*(.*?)\\s*$");
+    private static final Pattern MARKDOWN_HEADING = Pattern.compile("^\\s{0,3}(#{1,6})\\s+(.+?)\\s*#*\\s*$");
     private static final Pattern HTML_TABLE_ROW = Pattern.compile("(?is)<tr\\b[^>]*>(.*?)</tr>");
     private static final Pattern HTML_TABLE_CELL = Pattern.compile("(?is)<t[dh]\\b[^>]*>(.*?)</t[dh]>");
     private static final Set<String> NAME_LABELS = Set.of("name", "姓名", "候选人", "个人姓名");
-    private static final Set<String> EDUCATION_LABELS = Set.of("education", "教育", "教育经历", "学历", "学历经历");
-    private static final Set<String> SKILL_LABELS = Set.of("skills", "skill", "技能", "技能关键词", "技术栈", "专业技能");
-    private static final Set<String> PROJECT_LABELS = Set.of("project", "projects", "项目", "项目经历", "项目摘要");
-    private static final Set<String> METRIC_LABELS = Set.of("metric", "metrics", "result", "results", "成果", "结果", "指标", "量化结果");
+    private static final Set<String> ROLE_LABELS = Set.of(
+            "targetrole", "role", "position", "求职意向", "求职方向", "意向岗位", "岗位意向", "目标岗位", "应聘岗位", "期望职位", "意向职位");
+    private static final Set<String> EDUCATION_LABELS = Set.of("education", "教育", "教育经历", "教育背景", "学历", "学历经历");
+    private static final Set<String> SKILL_LABELS = Set.of("skills", "skill", "技能", "技能关键词", "技能清单", "个人技能", "核心技能", "技术栈", "专业技能");
+    private static final Set<String> PROJECT_LABELS = Set.of("project", "projects", "项目", "项目经历", "项目经验", "项目摘要");
+    private static final Set<String> PROJECT_FIELD_HEADINGS = Set.of(
+            "项目描述", "项目介绍", "description", "项目职责", "项目亮点", "核心亮点", "highlights",
+            "技术栈", "使用技术", "techstack", "technologies");
+    private static final Set<String> METRIC_LABELS = Set.of("metric", "metrics", "result", "results", "成果", "结果", "指标", "量化结果", "项目亮点", "项目成果", "核心亮点");
     private static final Set<String> EXPERIENCE_LABELS = Set.of("experience", "experiences", "work", "工作经历", "实习经历", "工作/实习经历");
-    private static final Set<String> AWARD_LABELS = Set.of("awards", "award", "honors", "荣誉", "奖项", "获奖经历");
+    private static final Set<String> AWARD_LABELS = Set.of("awards", "award", "honors", "荣誉", "荣誉奖项", "奖项", "获奖经历");
     private static final Set<String> QUESTION_HEADERS = Set.of("question", "questions", "题目", "问题", "题干", "面试问题");
     private static final Set<String> ANSWER_HEADERS = Set.of("answer", "suggested answer", "答案", "参考答案");
     private static final Set<String> CATEGORY_HEADERS = Set.of("category", "分类", "类型", "主题");
@@ -45,10 +51,12 @@ public class StructuredDocumentParser {
     ObjectNode parseResume(String markdown) {
         List<SourceLine> lines = sourceLines(markdown);
         Map<String, LocatedValue> labels = labeledValues(lines);
+        Map<String, List<ResumeBlock>> sections = resumeSections(lines);
         ObjectNode result = nodes.objectNode();
         result.put("schemaVersion", "interviewmirror.resume-content.v1");
         ObjectNode personal = result.putObject("personalInfo");
         putLabel(personal, "name", labels, NAME_LABELS);
+        putLabel(personal, "targetRole", labels, ROLE_LABELS);
         putLabel(personal, "email", labels, Set.of("email", "邮箱", "电子邮箱"));
         putLabel(personal, "phone", labels, Set.of("phone", "telephone", "mobile", "电话", "手机"));
         putLabel(personal, "location", labels, Set.of("location", "所在地", "居住地", "城市"));
@@ -56,64 +64,302 @@ public class StructuredDocumentParser {
         if (!personal.hasNonNull("phone")) findAndPut(personal, "phone", PHONE, lines);
 
         ArrayNode education = result.putArray("education");
-        LocatedValue educationValue = first(labels, EDUCATION_LABELS);
-        if (educationValue != null) {
-            ObjectNode item = education.addObject();
-            addSource(item, educationValue.lineNumber());
-            item.put("details", educationValue.value());
-            String[] parts = educationValue.value().split("\\s*[，,；;|/]\\s*");
-            for (String part : parts) {
-                String value = clean(part);
-                if (value.isBlank()) continue;
-                if (value.matches(".*(大学|学院|University|College).*")) item.put("institution", value);
-                else if (value.matches(".*(本科|硕士|博士|专科|Bachelor|Master|PhD|Associate).*")) item.put("degree", value);
-                else if (!item.has("major")) item.put("major", value);
-            }
-            if (!item.has("degree")) item.put("degree", educationValue.value());
+        List<ResumeBlock> educationBlocks = sections.getOrDefault("education", List.of());
+        if (!educationBlocks.isEmpty()) {
+            for (ResumeBlock block : educationBlocks) addEducation(education, block);
+        } else {
+            LocatedValue educationValue = first(labels, EDUCATION_LABELS);
+            if (educationValue != null) addEducation(education,
+                    new ResumeBlock("", educationValue.lineNumber(),
+                            List.of(new SourceLine(educationValue.lineNumber(), educationValue.value()))));
         }
 
         ArrayNode skills = result.putArray("skills");
-        LocatedValue skillValue = first(labels, SKILL_LABELS);
-        if (skillValue != null) {
-            for (String skill : skillValue.value().split("[,，、;；|/]+")) {
-                String value = clean(skill);
-                if (!value.isBlank()) skills.add(value);
-            }
+        List<ResumeBlock> skillBlocks = sections.getOrDefault("skills", List.of());
+        if (!skillBlocks.isEmpty()) {
+            for (ResumeBlock block : skillBlocks) addSkillBlock(skills, block.lines());
+        } else {
+            LocatedValue skillValue = first(labels, SKILL_LABELS);
+            if (skillValue != null) addInlineSkillValues(skills, skillValue.value());
         }
 
         ArrayNode projects = result.putArray("projects");
-        LocatedValue projectValue = first(labels, PROJECT_LABELS);
-        if (projectValue != null) {
-            ObjectNode project = projects.addObject();
-            project.put("name", projectValue.value());
-            project.putArray("technologies");
-            project.putArray("outcomes");
-            addSource(project, projectValue.lineNumber());
+        List<ResumeBlock> projectBlocks = sections.getOrDefault("projects", List.of());
+        if (!projectBlocks.isEmpty()) {
+            for (ResumeBlock block : projectBlocks) addProject(projects, block);
+        } else {
+            LocatedValue projectValue = first(labels, PROJECT_LABELS);
+            if (projectValue != null) {
+                ObjectNode project = projects.addObject();
+                project.put("name", projectValue.value());
+                project.putArray("technologies");
+                project.putArray("outcomes");
+                project.put("description", projectValue.value());
+                addSource(project, projectValue.lineNumber());
+            }
         }
 
         ArrayNode metrics = result.putArray("metrics");
-        LocatedValue metricValue = first(labels, METRIC_LABELS);
-        if (metricValue != null) {
-            metrics.add(metricValue.value());
-            if (!projects.isEmpty()) ((ArrayNode) projects.get(0).get("outcomes")).add(metricValue.value());
+        List<ResumeBlock> metricBlocks = sections.getOrDefault("metrics", List.of());
+        if (!metricBlocks.isEmpty()) {
+            for (ResumeBlock block : metricBlocks) {
+                for (SourceLine line : block.lines()) addNonBlank(metrics, line.text());
+            }
+        } else {
+            LocatedValue metricValue = first(labels, METRIC_LABELS);
+            if (metricValue != null) metrics.add(metricValue.value());
         }
-
         ArrayNode experiences = result.putArray("experiences");
-        LocatedValue experienceValue = first(labels, EXPERIENCE_LABELS);
-        if (experienceValue != null) {
-            ObjectNode experience = experiences.addObject();
-            experience.put("description", experienceValue.value());
-            addSource(experience, experienceValue.lineNumber());
+        List<ResumeBlock> experienceBlocks = sections.getOrDefault("experience", List.of());
+        if (!experienceBlocks.isEmpty()) {
+            for (ResumeBlock block : experienceBlocks) {
+                String description = blockText(block.lines());
+                if (description.isBlank()) continue;
+                ObjectNode experience = experiences.addObject();
+                if (!EXPERIENCE_LABELS.contains(normalize(block.title()))) {
+                    experience.put("organization", clean(block.title()));
+                }
+                experience.put("description", description);
+                addSource(experience, block.lineNumber());
+            }
+        } else {
+            LocatedValue experienceValue = first(labels, EXPERIENCE_LABELS);
+            if (experienceValue != null) {
+                ObjectNode experience = experiences.addObject();
+                experience.put("description", experienceValue.value());
+                addSource(experience, experienceValue.lineNumber());
+            }
         }
 
         ArrayNode awards = result.putArray("awards");
-        LocatedValue awardValue = first(labels, AWARD_LABELS);
-        if (awardValue != null) {
-            for (String award : awardValue.value().split("[;；|]+")) {
-                if (!clean(award).isBlank()) awards.addObject().put("name", clean(award));
+        List<ResumeBlock> awardBlocks = sections.getOrDefault("awards", List.of());
+        if (!awardBlocks.isEmpty()) {
+            for (ResumeBlock block : awardBlocks) {
+                for (SourceLine line : block.lines()) addAwardLines(awards, line.text());
             }
+        } else {
+            LocatedValue awardValue = first(labels, AWARD_LABELS);
+            if (awardValue != null) addAwardLines(awards, awardValue.value());
         }
         return result;
+    }
+
+    boolean hasUsableResumeContent(ObjectNode content) {
+        if (content == null) return false;
+        var personal = content.path("personalInfo");
+        if (!personal.path("name").asString("").isBlank()
+                || !personal.path("targetRole").asString("").isBlank()) return true;
+        for (String field : new String[]{"education", "experiences", "projects", "skills", "awards"}) {
+            if (!content.path(field).isEmpty()) return true;
+        }
+        return false;
+    }
+
+    private static Map<String, List<ResumeBlock>> resumeSections(List<SourceLine> lines) {
+        Map<String, List<ResumeBlock>> sections = new LinkedHashMap<>();
+        String activeSection = "";
+        ResumeBlockBuilder current = null;
+        for (SourceLine line : lines) {
+            Matcher heading = MARKDOWN_HEADING.matcher(line.text());
+            if (heading.matches()) {
+                String title = clean(heading.group(2));
+                if (activeSection.equals("projects") && PROJECT_FIELD_HEADINGS.contains(normalize(title))) {
+                    if (current != null) current.lines().add(line);
+                    continue;
+                }
+                String kind = sectionKind(title);
+                if (!kind.isBlank()) {
+                    if (current != null) addBlock(sections, activeSection, current.build());
+                    current = null;
+                    activeSection = kind;
+                    if (!kind.equals("projects")) current = new ResumeBlockBuilder(title, line.number());
+                } else if (activeSection.equals("projects")) {
+                    if (current != null) addBlock(sections, activeSection, current.build());
+                    current = new ResumeBlockBuilder(title, line.number());
+                } else if (activeSection.equals("experience")) {
+                    if (current != null) addBlock(sections, activeSection, current.build());
+                    current = new ResumeBlockBuilder(title, line.number());
+                } else {
+                    if (current != null) addBlock(sections, activeSection, current.build());
+                    current = null;
+                    activeSection = "";
+                }
+                continue;
+            }
+            if (current != null) current.lines().add(line);
+        }
+        if (current != null) addBlock(sections, activeSection, current.build());
+        return sections;
+    }
+
+    private static String sectionKind(String title) {
+        String key = normalize(title);
+        if (EDUCATION_LABELS.contains(key)) return "education";
+        if (SKILL_LABELS.contains(key)) return "skills";
+        if (PROJECT_LABELS.contains(key)) return "projects";
+        if (METRIC_LABELS.contains(key)) return "metrics";
+        if (EXPERIENCE_LABELS.contains(key)) return "experience";
+        if (AWARD_LABELS.contains(key)) return "awards";
+        return "";
+    }
+
+    private static void addBlock(Map<String, List<ResumeBlock>> sections, String section, ResumeBlock block) {
+        if (!section.isBlank()) sections.computeIfAbsent(section, ignored -> new ArrayList<>()).add(block);
+    }
+
+    private static void addEducation(ArrayNode education, ResumeBlock block) {
+        String details = blockText(block.lines());
+        if (details.isBlank()) return;
+        ObjectNode item = education.addObject();
+        item.put("details", details);
+        addSource(item, block.lineNumber());
+        for (String part : details.split("[\\r\\n,，;；|/]+")) {
+            String value = clean(part);
+            if (value.isBlank()) continue;
+            if (value.matches(".*(大学|学院|University|College).*")) {
+                if (!item.has("institution")) item.put("institution", value);
+            } else if (value.matches(".*(本科|硕士|博士|专科|Bachelor|Master|PhD|Associate).*")) {
+                if (!item.has("degree")) item.put("degree", value);
+            } else if (!item.has("major")) item.put("major", value);
+        }
+    }
+
+    private static void addProject(ArrayNode projects, ResumeBlock block) {
+        ObjectNode project = projects.addObject();
+        project.put("name", clean(block.title()));
+        ArrayNode technologies = project.putArray("technologies");
+        ArrayNode outcomes = project.putArray("outcomes");
+        List<String> description = new ArrayList<>();
+        boolean inHighlights = false;
+        boolean capturedTechLine = false;
+        for (SourceLine source : block.lines()) {
+            String text = clean(source.text());
+            if (text.isBlank()) continue;
+            Matcher label = SECTION_LABEL.matcher(text);
+            Matcher heading = MARKDOWN_HEADING.matcher(source.text());
+            boolean hasLabel = label.matches();
+            boolean isHeading = heading.matches();
+            String labelName = hasLabel ? normalize(label.group(1)) : isHeading ? normalize(text) : "";
+            String labelValue = hasLabel ? clean(label.group(2)) : "";
+            if (Set.of("项目亮点", "核心亮点", "成果", "结果", "outcomes", "highlights").contains(labelName)) {
+                inHighlights = true;
+                addNonBlank(outcomes, labelValue);
+                continue;
+            }
+            if (Set.of("项目描述", "项目介绍", "description", "项目职责").contains(labelName)) {
+                inHighlights = false;
+                addNonBlank(description, labelValue);
+                continue;
+            }
+            if (Set.of("技术栈", "使用技术", "techstack", "technologies").contains(labelName)) {
+                addTechnologyLine(technologies, labelValue);
+                capturedTechLine = !labelValue.isBlank();
+                continue;
+            }
+            if (!capturedTechLine && description.isEmpty() && !inHighlights
+                    && !text.contains("：") && !text.contains(":")) {
+                addTechnologyLine(technologies, text);
+                capturedTechLine = true;
+                continue;
+            }
+            if (inHighlights) addNonBlank(outcomes, text);
+            else addNonBlank(description, text);
+        }
+        description.removeIf(line -> isTechnologyEcho(line, technologies));
+        String descriptionText = String.join("\n", description).trim();
+        if (!descriptionText.isBlank()) project.put("description", descriptionText);
+        addSource(project, block.lineNumber());
+    }
+
+    private static boolean isTechnologyEcho(String value, ArrayNode technologies) {
+        String contentKey = normalize(value);
+        if (contentKey.isBlank() || technologies.isEmpty()) return false;
+        StringBuilder technologyKey = new StringBuilder();
+        for (var technology : technologies) technologyKey.append(normalize(technology.asString("")));
+        return contentKey.equals(technologyKey.toString());
+    }
+
+    private static void addSkillBlock(ArrayNode target, List<SourceLine> lines) {
+        boolean hasBullets = lines.stream().anyMatch(line -> isListItem(line.text()));
+        StringBuilder current = new StringBuilder();
+        for (SourceLine line : lines) {
+            String value = clean(line.text());
+            if (value.isBlank()) {
+                flushSkill(target, current);
+                continue;
+            }
+            if (hasBullets && isListItem(value)) {
+                flushSkill(target, current);
+                current.append(stripListMarker(value));
+            } else if (hasBullets && current.length() > 0) {
+                current.append(' ').append(stripListMarker(value));
+            } else {
+                // Without list markers, keep each source paragraph as one skill statement.
+                flushSkill(target, current);
+                current.append(stripListMarker(value));
+            }
+        }
+        flushSkill(target, current);
+    }
+
+    private static void addInlineSkillValues(ArrayNode target, String raw) {
+        String value = clean(raw);
+        Matcher label = SECTION_LABEL.matcher(value);
+        if (label.matches() && SKILL_LABELS.contains(normalize(label.group(1)))) value = clean(label.group(2));
+        addNonBlank(target, value);
+    }
+
+    private static void flushSkill(ArrayNode target, StringBuilder current) {
+        String value = current.toString().trim();
+        if (!value.isBlank()) addNonBlank(target, value);
+        current.setLength(0);
+    }
+
+    private static boolean isListItem(String value) {
+        return value != null && value.matches("^\\s*(?:[-*+•·]\\s*|\\d+[.)、）]\\s*).+");
+    }
+
+    private static String stripListMarker(String value) {
+        return value == null ? "" : value.replaceFirst("^\\s*(?:(?:[-*+•·])\\s*|(?:\\d+[.)、）])\\s*)", "").trim();
+    }
+
+    private static void addAwardLines(ArrayNode target, String raw) {
+        String value = clean(raw);
+        if (value.isBlank()) return;
+        Matcher label = SECTION_LABEL.matcher(value);
+        if (label.matches() && AWARD_LABELS.contains(normalize(label.group(1)))) value = clean(label.group(2));
+        for (String part : value.split("[;；|]+")) {
+            String award = clean(part).replaceAll("^[-*+•·\\d.、)）]+\\s*", "");
+            if (!award.isBlank()) target.addObject().put("name", award);
+        }
+    }
+
+    private static void addTechnologyLine(ArrayNode target, String raw) {
+        for (String technology : clean(raw).split("[,，、;；|\\s]+")) addNonBlank(target, technology);
+    }
+
+    private static void addNonBlank(ArrayNode target, String raw) {
+        String value = clean(raw).replaceAll("^[-*+•·\\d.、)）]+\\s*", "").trim();
+        if (!value.isBlank() && !containsText(target, value)) target.add(value);
+    }
+
+    private static void addNonBlank(List<String> target, String raw) {
+        String value = clean(raw).replaceAll("^[-*+•·\\d.、)）]+\\s*", "").trim();
+        if (!value.isBlank()) {
+            String key = normalize(value);
+            boolean alreadyPresent = target.stream().anyMatch(existing -> normalize(existing).equals(key));
+            if (!alreadyPresent) target.add(value);
+        }
+    }
+
+    private static boolean containsText(ArrayNode array, String value) {
+        for (var node : array) if (node.asString("").equals(value)) return true;
+        return false;
+    }
+
+    private static String blockText(List<SourceLine> lines) {
+        return lines.stream().map(line -> clean(line.text())).filter(value -> !value.isBlank())
+                .reduce((left, right) -> left + "\n" + right).orElse("");
     }
 
     ObjectNode parseQuestionBank(String markdown) {
@@ -312,6 +558,7 @@ public class StructuredDocumentParser {
                 || SKILL_LABELS.contains(normalized) || PROJECT_LABELS.contains(normalized)
                 || METRIC_LABELS.contains(normalized) || EXPERIENCE_LABELS.contains(normalized)
                 || AWARD_LABELS.contains(normalized)
+                || ROLE_LABELS.contains(normalized)
                 || Set.of("email", "邮箱", "电子邮箱", "phone", "telephone", "mobile", "电话", "手机",
                 "location", "所在地", "居住地", "城市").contains(normalized);
     }
@@ -337,4 +584,19 @@ public class StructuredDocumentParser {
     private record SourceLine(int number, String text) { }
     private record LocatedValue(String value, int lineNumber) { }
     private record Question(String stem, String answer, String category, int lineNumber) { }
+    private record ResumeBlock(String title, int lineNumber, List<SourceLine> lines) { }
+
+    private static final class ResumeBlockBuilder {
+        private final String title;
+        private final int lineNumber;
+        private final List<SourceLine> lines = new ArrayList<>();
+
+        private ResumeBlockBuilder(String title, int lineNumber) {
+            this.title = title;
+            this.lineNumber = lineNumber;
+        }
+
+        private List<SourceLine> lines() { return lines; }
+        private ResumeBlock build() { return new ResumeBlock(title, lineNumber, List.copyOf(lines)); }
+    }
 }
