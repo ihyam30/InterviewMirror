@@ -1,13 +1,13 @@
 # 面试模式规则
 
-> 版本：`interviewmirror.mode-rules.v1.0.0`  
+> 版本：`interviewmirror.mode-rules.v1.1.0`<br>
 > API 合同：`schemas/interview-request.v1.schema.json`
 
 ## 1. 两种模式
 
 | 规则 | 综合面试 `COMPREHENSIVE` | 专项面试 `QUESTION_BANK` |
 |---|---|---|
-| 必需输入 | 已确认且属于当前用户的 `resumeId` | 已确认且属于当前用户的 `questionBankId` |
+| 必需输入 | 已确认且属于当前用户的 `resumeId` | 已确认且属于当前用户、包含至少 6 道有效题目的 `questionBankId` |
 | 可选输入 | `jdText`，允许缺省/空串 | 无 |
 | 禁止输入 | `questionBankId` | `resumeId`、`jdText` |
 | 问题来源 | 简历项目 + 可选 JD | 已确认题库中的题目 |
@@ -22,7 +22,7 @@
 ### 综合模式
 
 1. `mode` 必须为 `COMPREHENSIVE`。
-2. `resumeId` 必须存在、属于当前用户且状态 `READY`；否则拒绝 `409 RESUME_NOT_READY` 或 `404 RESOURCE_NOT_FOUND`，不调用模型。
+2. `resumeId` 必须存在、属于当前用户且状态 `CONFIRMED`；否则拒绝 `409 RESUME_NOT_READY` 或 `404 RESOURCE_NOT_FOUND`，不调用模型。
 3. 不允许提供 `questionBankId`；若提供，返回 `400 MODE_INPUT_CONFLICT`。
 4. `jdText` 缺省/空白合法；若非空则去除首尾空白、规范化换行，并按冻结版本限制 1,500 字（`length > 1500` 时 `400 JD_TOO_LONG`）。
 5. 上传文件限制、可编辑解析状态及确认规则见 `USER-FLOW.md`；只将已确认简历快照和用户粘贴的 JD 放进场次上下文。
@@ -30,15 +30,15 @@
 ### 专项模式
 
 1. `mode` 必须为 `QUESTION_BANK`。
-2. `questionBankId` 必须存在、属于当前用户且状态 `READY`、题目数 ≥1；否则拒绝 `409 QUESTION_BANK_NOT_READY` 或 `422 EMPTY_QUESTION_BANK`。
+2. `questionBankId` 必须存在、属于当前用户且状态 `CONFIRMED`，并至少包含 6 道 `stem` 非空的有效题目；不足 6 道时服务端返回 `422 QUESTION_BANK_NOT_ENOUGH_QUESTIONS`，资料未确认或不属于当前用户时按资源门禁拒绝。
 3. 明确拒绝缺题库；不得回退为综合面试。
 4. 请求中不得携带 `resumeId` 或 `jdText`；返回 `400 MODE_INPUT_CONFLICT`，不读取相关资源。
-5. 从用户确认的题目快照抽题并保存 question IDs；题库变更不改变已创建场次。
+5. 当前阶段每场固定准备 6 道主问题；从用户确认的题目快照抽取并保存 question IDs。题库超过 6 道时随机抽取 6 道；题库变更不改变已创建场次。
 
 ## 3. 流程分支和限制
 
 ```text
-create → validate mode-specific inputs → load confirmed snapshot → select 5–8 main questions
+create → validate mode-specific inputs → load confirmed snapshot → select 5–8 main questions (Stage 3 current target: 6)
  → ask → save answer → score/evidence → [follow-up <=2 per main question | next main question]
  → [user ends | question limit] → report → [gap analysis iff comprehensive && jd non-empty]
 ```
@@ -67,6 +67,10 @@ create → validate mode-specific inputs → load confirmed snapshot → select 
 - 无 JD、未问到或没有有效回答证据的要求必须标 `UNASSESSED`，不能记为零分或写成能力差距。
 - 所有输出保存 `contractVersion`、`promptVersion`、`modelId`、资料快照 ID 和评测 `gitHead`。
 
-## 5. 与计划的冲突与处置
+## 5. 规则口径与兼容性
+
+专项面试当前固定准备 6 道主问题，因此面试来源题库必须至少有 6 道有效题目。题库管理允许用户确认只有 1–5 道有效题目的资料，但这类题库不能创建专项面试；补充到 6 道并确认后即可使用。此规则与 `DEVELOPMENT_PLAN.md`、`USER-FLOW.md` 和阶段 3 后端校验保持一致。
+
+## 6. 与计划的其他差异与处置
 
 根目录计划明确的评分维度是五维；本任务上下文提出七维。为兼容计划，五维作为 Stage 0 阶段闸门基准；七维产品草案在报告 Schema 与评分量表中显式版本化，并将计划“表达逻辑”映射到“沟通表达 + 逻辑结构”的子维度。新增的“文化匹配”仅为严格受限的可空扩展，不能改变 M0a 门槛或用于人格/价值判断。此差异需在进入 M0b/M1 前由产品负责人批准写回主计划。

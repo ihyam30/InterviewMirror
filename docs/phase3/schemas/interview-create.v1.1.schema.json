@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interviewmirror.local/schemas/interview-create.v1.1.schema.json",
+  "title": "InterviewMirror interview create request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "clientRequestId", "mode", "locale", "modelDataConsent"],
+  "properties": {
+    "schemaVersion": { "const": "1.1.0" },
+    "clientRequestId": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "mode": { "enum": ["COMPREHENSIVE", "QUESTION_BANK"] },
+    "resumeId": { "type": "string", "format": "uuid" },
+    "questionBankId": { "type": "string", "format": "uuid" },
+    "jdText": { "type": "string", "maxLength": 1500 },
+    "locale": { "const": "zh-CN" },
+    "modelDataConsent": { "const": true }
+  },
+  "oneOf": [
+    {
+      "properties": { "mode": { "const": "COMPREHENSIVE" } },
+      "required": ["resumeId"],
+      "not": { "required": ["questionBankId"] }
+    },
+    {
+      "properties": { "mode": { "const": "QUESTION_BANK" } },
+      "required": ["questionBankId"],
+      "not": { "anyOf": [{ "required": ["resumeId"] }, { "required": ["jdText"] }] }
+    }
+  ]
+}

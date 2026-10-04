@@ -16,6 +16,17 @@ spring:
     password: ${DATABASE_PASSWORD:local-dev-only-change-me}
     hikari:
       maximum-pool-size: 10
+  ai:
+    model:
+      chat: openai
+    openai:
+      base-url: ${INTERVIEW_MODEL_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+      api-key: ${INTERVIEW_MODEL_API_KEY:disabled}
+      chat:
+        model: ${INTERVIEW_MODEL_ID:qwen-plus-2025-12-01}
+        options:
+          temperature: 0.2
+      max-retries: 0
   flyway:
     enabled: true
   servlet:
@@ -48,6 +59,12 @@ interviewmirror:
     lease: ${PARSE_TASK_LEASE:PT3M}
     worker-id: ${PARSE_WORKER_ID:local-worker-1}
     enabled: ${PARSE_WORKER_ENABLED:true}
+  graph:
+    enabled: ${LANGGRAPH4J_ENABLED:true}
+  model:
+    enabled: ${INTERVIEW_MODEL_ENABLED:false}
+    provider: ${INTERVIEW_MODEL_PROVIDER:QWEN}
+    id: ${INTERVIEW_MODEL_ID:qwen-plus-2025-12-01}
 
 logging:
   level:

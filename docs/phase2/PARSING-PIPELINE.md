@@ -33,7 +33,7 @@ Flyway `V2__create_managed_documents_and_parse_tasks.sql` 创建 `managed_docume
 | `DELETING` | 已开始删除文件和资料 | 否 |
 | `DELETE_FAILED` | 对象删除失败，资料仍保留并可重试删除 | 否 |
 
-解析任务状态为 `PENDING`、`PROCESSING`、`SUCCEEDED`、`FAILED`、`CANCELLED`。确认仅接受有效 `PARSED` 内容；保存编辑使用 `contentVersion` 乐观锁；编辑已确认资料会递增版本并清除确认标记。题库确认至少包含一道非空题，简历确认至少有姓名或一项教育、经历、项目、技能内容。
+解析任务状态为 `PENDING`、`PROCESSING`、`SUCCEEDED`、`FAILED`、`CANCELLED`。确认仅接受有效 `PARSED` 内容；保存编辑使用 `contentVersion` 乐观锁；编辑已确认资料会递增版本并清除确认标记。题库确认至少包含一道非空题，简历确认至少有姓名或一项教育、经历、项目、技能内容。题库“可确认”与“可用于专项面试”是不同门槛：当前专项面试固定 6 道主问题，创建面试时由后端再次要求至少 6 道非空有效题目；1–5 道题的确认题库仍可编辑补题，但不能进入面试。
 
 唯一面试资料入口为：
 

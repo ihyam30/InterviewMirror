@@ -3,7 +3,8 @@ import { test } from 'node:test'
 import { currentUser, login, logout, refreshCsrf, ApiError } from './api.js'
 import { cancelPendingReview } from './pending-review.js'
 import { canReviewDocument, canRetryDocument, canUseDocument, documentStatusLabel } from './document-state.js'
-import { createDocument, updateDocument, validateInterviewSource } from './api.js'
+import { answerInterview, createDocument, createInterview, endInterview, getInterview, getInterviewTurns,
+  listInterviews, replaceInterviewQuestion, startInterview, updateDocument, validateInterviewSource } from './api.js'
 import { buildResumeContent, projectRowsForReview } from './document-content.js'
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
@@ -104,6 +105,32 @@ test('document API sends multipart data and uses owner-confirmation gate endpoin
   assert.equal(calls[1].url, '/api/v1/question-banks/bank-1')
   assert.equal(JSON.parse(calls[1].options.body).contentVersion, 2)
   assert.equal(calls[2].url, '/api/v1/interview-sources/resumes/resume-1')
+})
+
+test('interview API uses authenticated JSON requests for lifecycle and idempotent answers', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options })
+    return json({ data: { id: 'interview-1', status: 'RUNNING' } })
+  }
+  await createInterview({ schemaVersion: '1.1.0', mode: 'COMPREHENSIVE', modelDataConsent: true })
+  await startInterview('interview-1')
+  await getInterview('interview-1')
+  await getInterviewTurns('interview-1')
+  await listInterviews()
+  await answerInterview('interview-1', 'turn-1', 'answer-request-1', 'candidate answer')
+  await replaceInterviewQuestion('interview-1', 'turn-2', 'replace-request-1')
+  await endInterview('interview-1', 'end-request-1')
+  assert.deepEqual(calls.map((call) => call.url), [
+    '/api/v1/interviews', '/api/v1/interviews/interview-1/start', '/api/v1/interviews/interview-1',
+    '/api/v1/interviews/interview-1/turns', '/api/v1/interviews',
+    '/api/v1/interviews/interview-1/answers', '/api/v1/interviews/interview-1/replace-question',
+    '/api/v1/interviews/interview-1/end',
+  ])
+  assert.deepEqual(JSON.parse(calls[5].options.body), {
+    turnId: 'turn-1', clientRequestId: 'answer-request-1', answer: 'candidate answer',
+  })
+  assert.equal(calls[5].options.credentials, 'include')
 })
 
 test('resume review can edit project details without dropping parsed technologies or outcomes', () => {

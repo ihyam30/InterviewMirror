@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interviewmirror.local/schemas/interview-turn.v1.0.schema.json",
+  "title": "Interview turn response",
+  "type": "object",
+  "required": ["schemaVersion", "id", "sequence", "type", "mainQuestionIndex", "question", "status", "askedAt"],
+  "properties": {
+    "schemaVersion": { "const": "interviewmirror.interview-turn.v1.0.0" },
+    "id": { "type": "string", "format": "uuid" },
+    "sequence": { "type": "integer", "minimum": 1 },
+    "type": { "enum": ["MAIN", "FOLLOW_UP"] },
+    "mainQuestionIndex": { "type": "integer", "minimum": 1, "maximum": 8 },
+    "followupIndex": { "type": ["integer", "null"], "minimum": 1, "maximum": 2 },
+    "sourceQuestionId": { "type": ["string", "null"] },
+    "question": { "type": "string", "minLength": 1 },
+    "answer": { "type": ["string", "null"] },
+    "status": { "enum": ["ASKED", "ANSWERED", "SKIPPED"] },
+    "askedAt": { "type": "string", "format": "date-time" },
+    "answeredAt": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

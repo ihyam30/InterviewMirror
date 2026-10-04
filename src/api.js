@@ -155,3 +155,46 @@ export async function validateInterviewSource(type, id) {
   const route = type === 'RESUME' ? 'resumes' : 'question-banks'
   return request(`/api/v1/interview-sources/${route}/${encodeURIComponent(id)}`)
 }
+
+export async function createInterview(interview) {
+  return request('/api/v1/interviews', { method: 'POST', body: JSON.stringify(interview) })
+}
+
+export async function listInterviews() {
+  return request('/api/v1/interviews')
+}
+
+export async function getInterview(id) {
+  return request(`/api/v1/interviews/${encodeURIComponent(id)}`)
+}
+
+export async function startInterview(id) {
+  return request(`/api/v1/interviews/${encodeURIComponent(id)}/start`, { method: 'POST' })
+}
+
+export async function getInterviewTurns(id) {
+  return request(`/api/v1/interviews/${encodeURIComponent(id)}/turns`)
+}
+
+export async function answerInterview(id, turnId, clientRequestId, answer) {
+  return request(`/api/v1/interviews/${encodeURIComponent(id)}/answers`, {
+    method: 'POST', body: JSON.stringify({ turnId, clientRequestId, answer }),
+  })
+}
+
+export async function replaceInterviewQuestion(id, turnId, clientRequestId) {
+  return request(`/api/v1/interviews/${encodeURIComponent(id)}/replace-question`, {
+    method: 'POST', body: JSON.stringify({ turnId, clientRequestId }),
+  })
+}
+
+export async function endInterview(id, clientRequestId) {
+  return request(`/api/v1/interviews/${encodeURIComponent(id)}/end`, {
+    method: 'POST', body: JSON.stringify({ clientRequestId }),
+  })
+}
+
+export function openInterviewEvents(id) {
+  if (typeof EventSource === 'undefined') return null
+  return new EventSource(`/api/v1/interviews/${encodeURIComponent(id)}/events`, { withCredentials: true })
+}

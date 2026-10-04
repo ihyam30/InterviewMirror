@@ -16,6 +16,8 @@ server:
       cookie:
         secure: false
 interviewmirror:
+  graph:
+    enabled: false
   mineru:
     poll-interval: PT1H
 logging:

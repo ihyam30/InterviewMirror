@@ -70,6 +70,40 @@ class ModelBenchmarkValidationTests {
     }
 
     @Test
+    void phase3FollowupRejectsMissingRationaleQuestionAndRepeatedPrompt() {
+        assertTrue(ModelBenchmarkApplication.phase3FollowupValidationErrors("原问题", "原问题",
+                new ModelBenchmarkApplication.RuntimeFollowupWire(true, "原因", "  "))
+                .contains("FOLLOWUP_QUESTION_MISSING"));
+        assertTrue(ModelBenchmarkApplication.phase3FollowupValidationErrors("原问题", "原问题",
+                new ModelBenchmarkApplication.RuntimeFollowupWire(true, "", "新追问"))
+                .contains("FOLLOWUP_RATIONALE_MISSING"));
+        assertTrue(ModelBenchmarkApplication.phase3FollowupValidationErrors("你如何验证？", "你如何验证？",
+                new ModelBenchmarkApplication.RuntimeFollowupWire(true, "原因", "你如何验证？"))
+                .contains("FOLLOWUP_QUESTION_REPEATS_CONTEXT"));
+        assertTrue(ModelBenchmarkApplication.phase3FollowupValidationErrors("你如何验证？", "验证效果用什么指标？",
+                new ModelBenchmarkApplication.RuntimeFollowupWire(true, "原因", "你如何验证？"))
+                .contains("FOLLOWUP_QUESTION_REPEATS_CONTEXT"));
+    }
+
+    @Test
+    void phase3FollowupAllowsMoveOnAndBoundsQuestionLength() {
+        assertTrue(ModelBenchmarkApplication.phase3FollowupValidationErrors("原问题", "原问题",
+                new ModelBenchmarkApplication.RuntimeFollowupWire(false, "回答充分", "" )).isEmpty());
+        assertTrue(ModelBenchmarkApplication.phase3FollowupValidationErrors("原问题", "原问题",
+                new ModelBenchmarkApplication.RuntimeFollowupWire(true, "原因", "追问".repeat(301)))
+                .contains("FOLLOWUP_QUESTION_TOO_LONG"));
+    }
+
+    @Test
+    void phase3FollowupPromptCarriesMainQuestionLatestQuestionAndAnswer() {
+        String prompt = ModelBenchmarkApplication.phase3FollowupPrompt("主问题", "追问", "候选回答");
+        assertTrue(prompt.contains("Prompt-Version=phase3.followup.v1"));
+        assertTrue(prompt.contains("当前主问题：\n主问题"));
+        assertTrue(prompt.contains("最近一条面试官提问：\n追问"));
+        assertTrue(prompt.contains("候选人回答：\n候选回答"));
+    }
+
+    @Test
     void reportEvidenceMustComeFromCandidateAnswer() {
         var report = new ModelBenchmarkApplication.ReportDraft("Some review.", List.of("A strength."),
                 List.of("A risk."), List.of("Improve measurement."), List.of("Study profiling."),

@@ -1,6 +1,6 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { currentUser as fetchCurrentUser, confirmDocument, createDocument, createQuestionBank, deleteDocument, downloadFile, getDocument, listDocuments, login as apiLogin, logout as apiLogout, retryDocument, updateDocument, validateInterviewSource } from './api.js'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { currentUser as fetchCurrentUser, confirmDocument, createDocument, createQuestionBank, deleteDocument, downloadFile, getDocument, listDocuments, login as apiLogin, logout as apiLogout, retryDocument, updateDocument, validateInterviewSource, createInterview, listInterviews, getInterview, startInterview, getInterviewTurns, answerInterview, replaceInterviewQuestion, endInterview, openInterviewEvents } from './api.js'
 import { canReviewDocument, canRetryDocument, documentStatusLabel } from './document-state.js'
 import { resumeViewModel } from './resume-display.js'
 
@@ -79,21 +79,25 @@ const selectedResumeId = ref(resumes.value.find((resume) => resume.default)?.id 
 const selectedBankId = ref(banks.value[0]?.id ?? '')
 const jdText = ref('')
 const interviewStage = ref('setup')
-const questionIndex = ref(0)
-const followupCount = ref(0)
-const currentQuestion = ref('')
 const answerText = ref('')
 const isThinking = ref(false)
 const messages = ref([])
 const turns = ref([])
+const activeInterview = ref(null)
+const modelDataConsent = ref(false)
+const pendingInterviewId = ref(null)
+const pendingAnswerRequest = ref(null)
+const answerScrollTarget = ref(null)
+const pendingReplaceRequest = ref(null)
+const pendingEndRequest = ref(null)
 const reportTitleDraft = ref('')
 const toast = ref('')
 const reviewDialog = ref(false)
 const pendingReview = ref(null)
 const resumeInput = ref(null)
 const bankInput = ref(null)
-const startedAt = ref(null)
 let toastTimer
+let interviewEvents = null
 const parseTimers = new Map()
 const authReady = ref(false)
 const currentUserInfo = ref(null)
@@ -101,25 +105,105 @@ const loginForm = ref({ identifier: 'demo1', password: '' })
 const loginBusy = ref(false)
 const loginError = ref('')
 
-const interviewScript = [
-  {
-    question: '请结合你的项目经历，介绍一个你最熟悉的 AI 应用项目。你负责了什么，解决了什么问题？',
-    followup: '你刚才提到负责了检索链路。能具体说说你做过的一个关键技术取舍，以及它带来的结果吗？',
-  },
-  {
-    question: '如果要判断一个 RAG 应用的回答质量，你会怎样设计一套可持续运行的评估方案？',
-    followup: '你会如何处理评估集更新后，新旧版本之间的结果可比性？',
-  },
-  {
-    question: '模型服务出现间歇性超时，但用户仍需要完成面试练习，你会如何设计这条链路？',
-    followup: '如果重试会增加费用，你会怎样设置重试边界和用户提示？',
-  },
-  {
-    question: '回到你最熟悉的项目，如果再给你两周时间，你会优先完善什么？为什么？',
-    followup: '你会用什么指标验证这两周的改动确实有效？',
-  },
-]
-const activeScript = ref(interviewScript)
+const activeTurn = computed(() => activeInterview.value?.activeTurn ?? null)
+const chatTimeline = ref(null)
+
+watch(activeTurn, async (turn) => {
+  const target = answerScrollTarget.value
+  if (!target || !turn?.id) return
+  if (activeInterview.value?.id !== target.interviewId) {
+    answerScrollTarget.value = null
+    return
+  }
+  if (turn.id === target.turnId) return
+
+  answerScrollTarget.value = null
+  await nextTick()
+  if (page.value !== 'practice' || interviewStage.value !== 'active') return
+  const nextQuestion = chatTimeline.value?.querySelector('[data-active-turn="true"]')
+  if (!nextQuestion) return
+
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  nextQuestion.scrollIntoView?.({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' })
+}, { flush: 'post' })
+
+const interviewLiveLabel = computed(() => {
+  if (activeInterview.value?.status === 'COMPLETING') return '正在安全结束面试'
+  if (activeInterview.value?.transitionPending) return '正在生成下一题'
+  return '练习进行中'
+})
+const interviewProgress = computed(() => ({
+  current: Math.min(activeInterview.value?.currentMainIndex ?? 0, activeInterview.value?.mainQuestionTarget ?? 6),
+  target: activeInterview.value?.mainQuestionTarget ?? 6,
+}))
+
+async function replaceCurrentQuestion() {
+  if (!activeInterview.value || !activeTurn.value || isThinking.value) return
+  if (!pendingReplaceRequest.value || pendingReplaceRequest.value.turnId !== activeTurn.value.id) {
+    pendingReplaceRequest.value = { turnId: activeTurn.value.id, clientRequestId: crypto.randomUUID() }
+  }
+  isThinking.value = true
+  try {
+    await replaceInterviewQuestion(activeInterview.value.id, pendingReplaceRequest.value.turnId,
+      pendingReplaceRequest.value.clientRequestId)
+    pendingReplaceRequest.value = null
+    await refreshInterview(activeInterview.value.id)
+    showToast('已更换当前问题')
+  } catch (error) {
+    showToast(error.message || '暂时无法更换问题')
+  } finally { isThinking.value = false }
+}
+
+function closeInterviewEvents() {
+  interviewEvents?.close()
+  interviewEvents = null
+}
+
+function displayInterviewTurns(rows) {
+  turns.value = rows.map((turn) => ({ question: turn.question, answer: turn.answer, type: turn.type, status: turn.status, id: turn.id }))
+  messages.value = []
+  for (const turn of rows) {
+    messages.value.push({ role: 'assistant', content: turn.question, time: '面试官', turnId: turn.id })
+    if (turn.answer) messages.value.push({ role: 'user', content: turn.answer, time: '我', turnId: turn.id })
+  }
+}
+
+async function refreshInterview(interviewId, { restore = false } = {}) {
+  const [interview, turnList] = await Promise.all([getInterview(interviewId), getInterviewTurns(interviewId)])
+  activeInterview.value = interview
+  displayInterviewTurns(turnList.turns || [])
+  if (restore) {
+    mode.value = interview.mode
+    selectedResumeId.value = interview.resumeId || ''
+    selectedBankId.value = interview.questionBankId || ''
+    reportTitleDraft.value = interview.title
+    interviewStage.value = interview.status === 'COMPLETE' ? 'complete' : 'active'
+    page.value = 'practice'
+  }
+  if (interview.status === 'COMPLETE') {
+    closeInterviewEvents()
+    interviewStage.value = 'complete'
+    pendingEndRequest.value = null
+    isThinking.value = false
+  } else if (!interview.transitionPending && interview.status === 'RUNNING') {
+    isThinking.value = false
+  }
+  return interview
+}
+
+function connectInterviewEvents(interviewId) {
+  closeInterviewEvents()
+  interviewEvents = openInterviewEvents(interviewId)
+  if (!interviewEvents) return
+  for (const eventName of ['interview.started', 'interview.question', 'interview.followup', 'interview.answer.saved', 'interview.completed', 'interview.error']) {
+    interviewEvents.addEventListener(eventName, () => {
+      refreshInterview(interviewId).catch(() => {})
+    })
+  }
+  interviewEvents.onerror = () => {
+    // EventSource reconnects with Last-Event-ID; REST remains the source of truth.
+  }
+}
 
 function remoteItem(resource) {
   const content = resource.content || {}
@@ -152,6 +236,11 @@ onMounted(async () => {
   try {
     currentUserInfo.value = await fetchCurrentUser()
     await loadOwnedResources()
+    const recent = (await listInterviews()).find((item) => item.status === 'RUNNING')
+    if (recent) {
+      await refreshInterview(recent.id, { restore: true })
+      connectInterviewEvents(recent.id)
+    }
   } catch (error) {
     if (error.status !== 401) loginError.value = error.message
   } finally {
@@ -174,6 +263,7 @@ async function submitLogin() {
 }
 
 async function signOut() {
+  closeInterviewEvents()
   try { await apiLogout() } catch { /* clear local view even if the server is unreachable */ }
   currentUserInfo.value = null
   resumes.value = []
@@ -190,6 +280,7 @@ function handleExpiredSession() {
 window.addEventListener('interviewmirror-auth-expired', handleExpiredSession)
 onUnmounted(() => window.removeEventListener('interviewmirror-auth-expired', handleExpiredSession))
 onUnmounted(() => parseTimers.forEach((timer) => clearTimeout(timer)))
+onUnmounted(closeInterviewEvents)
 
 const pageHeading = computed(() => ({
   home: ['工作台', '为下一场面试，先练一次。'],
@@ -242,105 +333,87 @@ function selectMode(nextMode) {
 }
 
 async function beginInterview() {
+  if (!modelDataConsent.value) return showToast('请先确认面试资料将发送至所选模型服务处理')
+  isThinking.value = true
   if (mode.value === 'COMPREHENSIVE') {
     const resume = resumes.value.find((item) => item.id === selectedResumeId.value && item.ready)
-    if (!resume) return showToast('请先选择一份已确认的简历')
-    if (jdText.value.trim().length > 1500) return showToast('JD 请控制在 1500 字以内')
-    try { await validateInterviewSource('RESUME', resume.id) } catch (error) { return showToast(error.message) }
+    if (!resume) { isThinking.value = false; return showToast('请先选择一份已确认的简历') }
+    if (jdText.value.trim().length > 1500) { isThinking.value = false; return showToast('JD 请控制在 1500 字以内') }
+    try { await validateInterviewSource('RESUME', resume.id) } catch (error) { isThinking.value = false; return showToast(error.message) }
     reportTitleDraft.value = jdText.value.trim().slice(0, 26) || 'AI 应用 / AI 全栈实习'
   } else {
     const bank = banks.value.find((item) => item.id === selectedBankId.value && item.ready)
-    if (!bank) return showToast('请先选择一份已确认的题库')
-    try { await validateInterviewSource('QUESTION_BANK', bank.id) } catch (error) { return showToast(error.message) }
+    if (!bank) { isThinking.value = false; return showToast('请先选择一份已确认的题库') }
+    try { await validateInterviewSource('QUESTION_BANK', bank.id) } catch (error) { isThinking.value = false; return showToast(error.message) }
     reportTitleDraft.value = bank.name
-    const questions = bank.questionItems?.length ? bank.questionItems : [
-      '请介绍一个你最有代表性的项目，以及你负责的部分。',
-      '你在项目中遇到的最大技术挑战是什么？',
-      '如果重新实现这个项目，你会优先改进什么？',
-    ]
-    activeScript.value = questions.map((question) => {
-      const stem = typeof question === 'string' ? question : question.stem
-      return {
-        question: stem,
-        followup: `关于“${stem.slice(0, 18)}”，能结合一次具体经历说明你的判断和结果吗？`,
+  }
+  try {
+    if (!pendingInterviewId.value) {
+      pendingAnswerRequest.value = null
+      pendingReplaceRequest.value = null
+      pendingEndRequest.value = null
+      const createBody = {
+        schemaVersion: '1.1.0', clientRequestId: crypto.randomUUID(), mode: mode.value,
+        locale: 'zh-CN', modelDataConsent: true,
+        ...(mode.value === 'COMPREHENSIVE'
+          ? { resumeId: selectedResumeId.value, ...(jdText.value.trim() ? { jdText: jdText.value.trim() } : {}) }
+          : { questionBankId: selectedBankId.value }),
       }
-    })
-  }
-
-  if (mode.value === 'COMPREHENSIVE') activeScript.value = interviewScript
-
-  interviewStage.value = 'active'
-  page.value = 'practice'
-  questionIndex.value = 0
-  followupCount.value = 0
-  turns.value = []
-  messages.value = []
-  answerText.value = ''
-  startedAt.value = Date.now()
-  askQuestion(activeScript.value[0].question)
-}
-
-function askQuestion(question) {
-  currentQuestion.value = question
-  isThinking.value = true
-  setTimeout(() => {
-    messages.value.push({ role: 'assistant', content: question, time: '刚刚' })
+      const created = await createInterview(createBody)
+      pendingInterviewId.value = created.id
+    }
+    const started = await startInterview(pendingInterviewId.value)
+    activeInterview.value = started
+    await refreshInterview(started.id)
+    pendingInterviewId.value = null
+    answerText.value = ''
+    interviewStage.value = 'active'
+    page.value = 'practice'
+    connectInterviewEvents(started.id)
+  } catch (error) {
+    showToast(error.message || '面试启动失败；配置已保留，可重试开始')
+  } finally {
     isThinking.value = false
-  }, 480)
+  }
 }
 
-function submitAnswer() {
+async function submitAnswer() {
   const answer = answerText.value.trim()
-  if (!answer || isThinking.value) return
-  turns.value.push({ question: currentQuestion.value, answer, note: '回答已记录，完整表现将在面试结束后统一复盘。', score: null })
-  messages.value.push({ role: 'user', content: answer, time: '刚刚' })
-  answerText.value = ''
-  const current = activeScript.value[questionIndex.value]
-
-  if (answer.length < 58 && followupCount.value === 0 && current.followup) {
-    followupCount.value = 1
-    askQuestion(current.followup)
-    return
-  }
-
-  questionIndex.value += 1
-  followupCount.value = 0
-  if (questionIndex.value >= activeScript.value.length) {
-    finishInterview()
-  } else {
-    askQuestion(activeScript.value[questionIndex.value].question)
+  if (!answer || isThinking.value || !activeInterview.value || !activeTurn.value) return
+  pendingAnswerRequest.value ??= { clientRequestId: crypto.randomUUID(), turnId: activeTurn.value.id, answer }
+  answerScrollTarget.value = { interviewId: activeInterview.value.id, turnId: pendingAnswerRequest.value.turnId }
+  isThinking.value = true
+  try {
+    await answerInterview(activeInterview.value.id, pendingAnswerRequest.value.turnId,
+      pendingAnswerRequest.value.clientRequestId, pendingAnswerRequest.value.answer)
+    pendingAnswerRequest.value = null
+    answerText.value = ''
+    await refreshInterview(activeInterview.value.id)
+    if (activeInterview.value.transitionPending) showToast('回答已安全保存，面试官正在准备下一题')
+  } catch (error) {
+    showToast(`${error.message} 可重试提交，系统会识别重复请求。`)
+  } finally {
+    isThinking.value = false
   }
 }
 
-function finishInterview() {
-  interviewStage.value = 'setup'
-  isThinking.value = false
-  const elapsed = startedAt.value ? Math.max(1, Math.round((Date.now() - startedAt.value) / 60000)) : 18
-  const hasJD = mode.value === 'COMPREHENSIVE' && Boolean(jdText.value.trim())
-  const report = {
-    ...seedReports[0],
-    id: `report-${Date.now()}`,
-    title: mode.value === 'COMPREHENSIVE' ? reportTitleDraft.value : reportTitleDraft.value,
-    mode: mode.value === 'COMPREHENSIVE' ? '综合面试' : '题库专项',
-    resumeId: mode.value === 'COMPREHENSIVE' ? selectedResumeId.value : null,
-    bankId: mode.value === 'QUESTION_BANK' ? selectedBankId.value : null,
-    jdText: mode.value === 'COMPREHENSIVE' ? jdText.value.trim() : '',
-    date: new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date()),
-    duration: `${elapsed} 分钟`,
-    questionCount: Math.max(1, turns.value.length),
-    overallScore: 78 + Math.floor(Math.random() * 12),
-    hasJD,
-    matchScore: hasJD ? 72 + Math.floor(Math.random() * 20) : null,
-    coverage: hasJD ? '7 / 9 项已评估' : null,
-    oneLine: hasJD ? '当前经历与岗位方向较匹配；进一步量化项目结果，补强评估与稳定性证据。' : null,
-    turns: turns.value.length ? [...turns.value] : seedReports[0].turns.slice(0, 2),
-    gaps: hasJD ? seedReports[0].gaps : [],
-    scores: seedReports[0].scores.map((item) => ({ ...item })),
+async function finishInterview() {
+  if (!activeInterview.value) { interviewStage.value = 'setup'; return }
+  if (activeInterview.value.status !== 'COMPLETE') {
+    isThinking.value = true
+    try {
+      pendingEndRequest.value ??= crypto.randomUUID()
+      await endInterview(activeInterview.value.id, pendingEndRequest.value)
+      pendingEndRequest.value = null
+      await refreshInterview(activeInterview.value.id)
+    } catch (error) {
+      showToast(error.message || '结束面试失败，请刷新后重试')
+      await refreshInterview(activeInterview.value.id).catch(() => {})
+      return
+    } finally { isThinking.value = false }
   }
-  reports.value.unshift(report)
-  selectedReportId.value = report.id
-  page.value = 'reportDetail'
-  showToast('面试已结束，复盘报告已生成')
+  closeInterviewEvents()
+  interviewStage.value = 'complete'
 }
 
 function exportPdf() {
@@ -745,9 +818,8 @@ function resetDemo() {
                   <p v-if="!resumes.some((item) => item.ready)" class="inline-hint error-hint">请先在“我的简历”上传并确认一份简历。</p>
                 </div>
                 <label class="field-label jd-label" for="jd-input">目标岗位 JD <span class="optional-tag">选填</span></label>
-                <textarea id="jd-input" v-model="jdText" class="text-field jd-field" maxlength="1500" placeholder="粘贴岗位职责与任职要求…\n\n有 JD 时，系统会在报告中加入岗位差异化分析；没有 JD 也可以开始综合练习。"></textarea>
+                <textarea id="jd-input" v-model="jdText" class="text-field jd-field" maxlength="1500" placeholder="粘贴岗位职责与任职要求…\n\n填写 JD 后，面试问题会参考目标岗位要求；当前版本暂不生成岗位差异报告。"></textarea>
                 <div class="field-footnote"><span>最多 1500 字</span><span>{{ jdText.length }} / 1500</span></div>
-          <div class="privacy-note"><span>◇</span><span>本阶段已接入本地私有文件存储；资料仅用于工程演示，解析字段由你在确认页填写，暂不调用解析服务或模型。</span></div>
               </template>
               <template v-else>
                 <label class="field-label">选择自定义题库 <span class="required-star">*</span></label>
@@ -761,42 +833,50 @@ function resetDemo() {
                   <button class="add-inline" @click="navigate('banks')">＋ 管理我的题库</button>
                   <p v-if="!banks.some((item) => item.ready)" class="inline-hint error-hint">请先上传并确认一份题库。</p>
                 </div>
-                <div class="bank-mode-note"><span class="note-icon">✦</span><div><strong>专注练习，不依赖简历</strong><p>AI 会围绕题库原题继续追问，并在报告中逐题复盘。本模式不会生成岗位差异分析。</p></div></div>
+                <div class="bank-mode-note"><span class="note-icon">✦</span><div><strong>专注练习，不依赖简历</strong><p>AI 会围绕题库原题继续追问。结束后可查看本场问题与回答记录；评分报告尚未接入。本模式不会生成岗位差异分析。</p></div></div>
               </template>
 
-              <div class="form-actions"><button class="subtle-button" @click="navigate('home')">返回</button><button class="primary-button" @click="beginInterview">开始面试 <span>→</span></button></div>
+              <label class="model-consent"><input v-model="modelDataConsent" type="checkbox" /><span>我同意将本场所选简历或题库内容、回答发送至配置的模型服务，以生成问题和追问。面试回答会保存在本地应用中。</span></label>
+              <div class="privacy-note"><span>◇</span><span>模型服务未配置时，面试无法启动。题库专项不会读取简历，综合面试仅使用已确认简历和可选 JD。</span></div>
+
+              <div class="form-actions"><button class="subtle-button" @click="navigate('home')">返回</button><button class="primary-button" :disabled="isThinking" @click="beginInterview">{{ isThinking ? '正在准备问题…' : '开始面试' }} <span>→</span></button></div>
             </section>
             <aside class="setup-aside">
               <div class="panel expectation-card"><span class="aside-spark">✦</span><span class="section-kicker">WHAT TO EXPECT</span><h3>这场练习会这样进行</h3>
                 <div class="expect-step"><span>01</span><div><strong>逐题作答</strong><small>像真实面试一样，一次回答一个问题。</small></div></div>
                 <div class="expect-step"><span>02</span><div><strong>根据回答追问</strong><small>回答不够具体时，面试官会继续深入。</small></div></div>
-                <div class="expect-step"><span>03</span><div><strong>结束后完整复盘</strong><small>查看逐题反馈、优势与下一步建议。</small></div></div>
+                <div class="expect-step"><span>03</span><div><strong>结束后回看记录</strong><small>查看本场已保存的问题与回答；AI 评分报告和改进建议尚未接入。</small></div></div>
                 <div class="duration-chip"><span>◷</span> 建议预留 20–30 分钟</div>
               </div>
-              <div class="aside-tip"><span class="tip-star">✦</span><p>不知道怎么回答也没关系。先说出你的思路，复盘时再一起拆解。</p></div>
+              <div class="aside-tip"><span class="tip-star">✦</span><p>不知道怎么回答也没关系。先说出你的思路，结束后可以回看本场问答记录。</p></div>
             </aside>
           </div>
         </template>
 
         <template v-else-if="page === 'practice' && interviewStage === 'active'">
-          <section class="interview-topline"><button class="back-link" @click="finishInterview">← 结束并查看复盘</button><span class="live-label"><span></span>练习进行中</span><span class="mode-chip">{{ mode === 'COMPREHENSIVE' ? '综合面试' : '题库专项' }}</span></section>
+          <section class="interview-topline"><button class="back-link" :disabled="isThinking || activeInterview?.status === 'COMPLETING'" @click="finishInterview">← 结束面试</button><span class="live-label"><span></span>{{ interviewLiveLabel }}</span><span class="mode-chip">{{ mode === 'COMPREHENSIVE' ? '综合面试' : '题库专项' }}</span></section>
           <section class="interview-layout">
             <div class="interview-main panel">
-              <div class="interview-header"><div><span class="section-kicker">AI INTERVIEWER</span><h1>{{ reportTitleDraft }}</h1><p>{{ mode === 'COMPREHENSIVE' ? '面试官会根据你的回答继续追问。' : `围绕「${banks.find((bank) => bank.id === selectedBankId)?.name ?? '自定义题库'}」进行练习。` }}</p></div><div class="progress-ring"><span>{{ Math.min(questionIndex + 1, activeScript.length) }}</span><small>/ {{ activeScript.length }}</small></div></div>
-              <div class="question-progress"><span :style="{ width: `${Math.max(8, (questionIndex / activeScript.length) * 100)}%` }"></span></div>
-              <div class="chat-timeline">
+              <div class="interview-header"><div><span class="section-kicker">AI INTERVIEWER</span><h1>{{ reportTitleDraft }}</h1><p>{{ mode === 'COMPREHENSIVE' ? '面试官会根据你的回答继续追问。' : `围绕「${banks.find((bank) => bank.id === selectedBankId)?.name ?? '自定义题库'}」进行练习。` }}</p></div><div class="progress-ring"><span>{{ interviewProgress.current }}</span><small>/ {{ interviewProgress.target }}</small></div></div>
+              <div class="question-progress"><span :style="{ width: `${Math.max(8, (interviewProgress.current / interviewProgress.target) * 100)}%` }"></span></div>
+              <div ref="chatTimeline" class="chat-timeline">
                 <div class="timeline-date">今天 · 面试开始</div>
-                <div v-for="(message, index) in messages" :key="index" class="chat-message" :class="message.role">
+                 <div v-for="(message, index) in messages" :key="index" class="chat-message" :class="message.role" :data-active-turn="message.role === 'assistant' && message.turnId === activeTurn?.id ? 'true' : null">
                   <span class="chat-avatar" :class="message.role === 'assistant' ? 'ai-avatar' : 'user-avatar'">{{ message.role === 'assistant' ? '镜' : '林' }}</span>
                   <div class="message-body"><div class="message-meta"><strong>{{ message.role === 'assistant' ? 'AI 面试官' : '我' }}</strong><small>{{ message.time }}</small></div><div class="message-bubble">{{ message.content }}</div></div>
                 </div>
-                <div v-if="isThinking" class="chat-message assistant"><span class="chat-avatar ai-avatar">镜</span><div class="message-body"><div class="message-meta"><strong>AI 面试官</strong><small>正在思考</small></div><div class="typing-bubble"><i></i><i></i><i></i></div></div></div>
+                <div v-if="isThinking || activeInterview?.transitionPending" class="chat-message assistant"><span class="chat-avatar ai-avatar">镜</span><div class="message-body"><div class="message-meta"><strong>AI 面试官</strong><small>正在思考</small></div><div class="typing-bubble"><i></i><i></i><i></i></div></div></div>
               </div>
-              <div class="answer-box"><textarea v-model="answerText" :disabled="isThinking" placeholder="输入你的回答…（Enter 发送，Shift + Enter 换行）" @keydown.enter.exact.prevent="submitAnswer"></textarea><div class="answer-controls"><span>尽量结合具体经历和结果回答</span><button class="send-button" :disabled="!answerText.trim() || isThinking" @click="submitAnswer">发送回答 <span>↑</span></button></div></div>
+              <div class="answer-box"><textarea v-model="answerText" :disabled="isThinking || activeInterview?.status !== 'RUNNING' || activeInterview?.transitionPending || activeTurn?.status !== 'ASKED'" placeholder="输入你的回答…（Enter 发送，Shift + Enter 换行）" @keydown.enter.exact.prevent="submitAnswer"></textarea><div class="answer-controls"><span>{{ pendingAnswerRequest ? '回答请求已保留，可安全重试' : '尽量结合具体经历和结果回答' }}</span><button class="send-button" :disabled="!answerText.trim() || isThinking || activeInterview?.status !== 'RUNNING' || activeInterview?.transitionPending || activeTurn?.status !== 'ASKED'" @click="submitAnswer">{{ pendingAnswerRequest ? '重试提交' : '发送回答' }} <span>↑</span></button></div><button v-if="activeTurn?.type === 'MAIN' && activeTurn?.status === 'ASKED' && activeInterview?.replacementAvailable" class="subtle-button replace-question" :disabled="isThinking || activeInterview?.status !== 'RUNNING'" @click="replaceCurrentQuestion">{{ pendingReplaceRequest ? '重试换题' : '换一道题' }}</button></div>
             </div>
-            <aside class="interview-aside"><div class="panel session-card"><span class="section-kicker">SESSION GUIDE</span><h3>保持你的节奏</h3><div class="session-stat"><span>当前进度</span><strong>问题 {{ Math.min(questionIndex + 1, activeScript.length) }} <small>/ {{ activeScript.length }}</small></strong></div><div class="session-stat"><span>追问方式</span><strong>根据回答动态深入</strong></div><div class="session-separator"></div><p><span>✦</span> 不需要追求完美答案。先讲清你的判断和经历。</p><button class="end-session" @click="finishInterview">结束本次面试</button></div>
+            <aside class="interview-aside"><div class="panel session-card"><span class="section-kicker">SESSION GUIDE</span><h3>保持你的节奏</h3><div class="session-stat"><span>当前进度</span><strong>问题 {{ interviewProgress.current }} <small>/ {{ interviewProgress.target }}</small></strong></div><div class="session-stat"><span>追问方式</span><strong>根据回答动态深入</strong></div><div class="session-separator"></div><p><span>✦</span> 不需要追求完美答案。先讲清你的判断和经历。</p><button class="end-session" :disabled="isThinking || activeInterview?.status === 'COMPLETING'" @click="finishInterview">{{ activeInterview?.status === 'COMPLETING' ? '正在安全结束' : '结束本次面试' }}</button></div>
               <div class="panel interview-context"><span class="section-kicker">本场资料</span><div v-if="mode === 'COMPREHENSIVE'" class="context-file"><span class="document-icon"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5"/></svg></span><div><strong>{{ resumes.find((resume) => resume.id === selectedResumeId)?.name }}</strong><small>简历已确认</small></div></div><div v-if="jdText.trim()" class="context-jd"><strong>目标 JD</strong><p>{{ jdText.slice(0, 120) }}{{ jdText.length > 120 ? '…' : '' }}</p></div><div v-if="mode === 'QUESTION_BANK'" class="context-file"><span class="document-icon bank-document"><svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20"/></svg></span><div><strong>{{ banks.find((bank) => bank.id === selectedBankId)?.name }}</strong><small>{{ banks.find((bank) => bank.id === selectedBankId)?.questions }} 道已确认题目</small></div></div></div></aside>
           </section>
+        </template>
+
+        <template v-else-if="page === 'practice' && interviewStage === 'complete'">
+          <div class="page-intro"><div><span class="section-kicker">INTERVIEW COMPLETE</span><h1>本场面试已结束</h1><p>{{ reportTitleDraft }} · {{ mode === 'COMPREHENSIVE' ? '综合面试' : '题库专项' }}</p></div><span class="intro-illustration">✓</span></div>
+          <section class="panel completion-panel"><h2>回答记录已保存</h2><p>本阶段暂不生成 AI 评分报告。你可以在本场记录中查看已保存的问题与回答，报告生成能力将在后续阶段接入。</p><div class="completion-turns"><article v-for="(turn, index) in turns" :key="turn.id" class="completion-turn"><strong>{{ index + 1 }}. {{ turn.type === 'FOLLOW_UP' ? '追问' : '问题' }}</strong><p>{{ turn.question }}</p><blockquote v-if="turn.answer">{{ turn.answer }}</blockquote><small v-else>本题未作答</small></article></div><div class="form-actions"><button class="subtle-button" @click="navigate('practice'); interviewStage = 'setup'; activeInterview = null; pendingInterviewId = null">返回面试设置</button><button class="primary-button" @click="navigate('home')">返回工作台</button></div></section>
         </template>
 
         <template v-else-if="page === 'reports'">

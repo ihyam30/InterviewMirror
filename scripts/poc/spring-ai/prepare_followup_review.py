@@ -9,6 +9,7 @@ import hashlib
 import json
 import random
 import re
+import secrets
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -172,14 +173,18 @@ def main() -> int:
     parser.add_argument("--qwen", type=Path, default=Path("data/poc/results/models/qwen.followup-40.json"))
     parser.add_argument("--glm", type=Path, default=Path("data/poc/results/models/glm.followup-40.reasoning-low.json"))
     parser.add_argument("--out-dir", type=Path, default=Path("data/poc/results/followup-review-v1"))
-    parser.add_argument("--seed", type=int, required=True, help="Keep private until both reviews are complete.")
+    parser.add_argument(
+        "--seed", type=int,
+        help="Optional private seed for reproducibility; omitted seeds are generated randomly and saved only in the unblinding key.",
+    )
     args = parser.parse_args()
 
     dataset_bytes = args.dataset.read_bytes()
     dataset_hash = hashlib.sha256(dataset_bytes).hexdigest()
     dataset = json.loads(dataset_bytes)
     runs = [read_json(args.qwen), read_json(args.glm)]
-    pack, key = create_pack(dataset, dataset_hash, runs, args.seed)
+    seed = args.seed if args.seed is not None else secrets.randbits(128)
+    pack, key = create_pack(dataset, dataset_hash, runs, seed)
     args.out_dir.mkdir(parents=True, exist_ok=True)
     pack_path = args.out_dir / "blind-pack.v1.json"
     key_path = args.out_dir / "unblinding-key.v1.json"

@@ -49,3 +49,25 @@ jobs:
       - run: python scripts/phase2/verify_eval_dataset.py
       - run: python -m unittest discover -s scripts/phase2 -p "test_*.py" -v
       - run: python -m unittest discover -s scripts/poc -p test_score_parser_outputs.py -v
+
+  phase3-interview-evaluation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/poc/spring-ai/verify_phase3_dataset.py
+      - run: python -m unittest discover -s scripts/poc/spring-ai -p 'test_phase3_dataset.py' -v
+      - run: python -m unittest discover -s scripts/poc/spring-ai -p 'test_*review.py' -v
+
+  spring-ai-benchmark-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - run: mvn -B -f scripts/poc/spring-ai/pom.xml test

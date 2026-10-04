@@ -58,6 +58,12 @@ services:
       DEMO2_PASSWORD: ${DEMO2_PASSWORD:-MirrorDemo2!}
       MINERU_WORKER_URL: ${MINERU_WORKER_URL:-http://host.docker.internal:8765}
       MINERU_WORKER_TOKEN: ${MINERU_WORKER_TOKEN:-}
+      LANGGRAPH4J_ENABLED: ${LANGGRAPH4J_ENABLED:-true}
+      INTERVIEW_MODEL_ENABLED: ${INTERVIEW_MODEL_ENABLED:-false}
+      INTERVIEW_MODEL_PROVIDER: ${INTERVIEW_MODEL_PROVIDER:-QWEN}
+      INTERVIEW_MODEL_BASE_URL: ${INTERVIEW_MODEL_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
+      INTERVIEW_MODEL_API_KEY: ${INTERVIEW_MODEL_API_KEY:-disabled}
+      INTERVIEW_MODEL_ID: ${INTERVIEW_MODEL_ID:-qwen-plus-2025-12-01}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:

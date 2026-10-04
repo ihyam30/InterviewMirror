@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interviewmirror.local/schemas/interview-answer.v1.0.schema.json",
+  "title": "Interview answer request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["turnId", "clientRequestId", "answer"],
+  "properties": {
+    "turnId": { "type": "string", "format": "uuid" },
+    "clientRequestId": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "answer": { "type": "string", "minLength": 1, "maxLength": 10000 }
+  }
+}
