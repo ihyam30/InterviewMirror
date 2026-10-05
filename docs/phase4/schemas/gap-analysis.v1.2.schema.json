@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://interviewmirror.local/schemas/gap-analysis.v1.2.schema.json",
+  "title": "InterviewMirror gap analysis v1.2",
+  "type": "object",
+  "required": ["schemaVersion", "gapAnalysisId", "reportId", "matchScore", "formulaVersion", "coverage", "requirements", "gaps", "radar", "generatedAt", "summary"],
+  "properties": {
+    "schemaVersion": {"const": "1.2.0"},
+    "gapAnalysisId": {"type": "string", "format": "uuid"},
+    "reportId": {"type": "string", "format": "uuid"},
+    "matchScore": {"type": ["integer", "null"], "minimum": 0, "maximum": 100},
+    "formulaVersion": {"const": "match-40-60.v1"},
+    "coverage": {"type": "object", "required": ["evaluated", "total"], "properties": {"evaluated": {"type": "integer", "minimum": 0}, "total": {"type": "integer", "minimum": 1}}, "additionalProperties": false},
+    "requirements": {"type": "array", "minItems": 1, "maxItems": 20, "items": {"$ref": "#/$defs/requirement"}},
+    "gaps": {"type": "array", "items": {"$ref": "#/$defs/gap"}},
+    "radar": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/radarAxis"}},
+    "generatedAt": {"type": "string", "format": "date-time"},
+    "summary": {"type": "object", "required": ["matchScore", "evaluatedRequirements", "totalRequirements", "topGaps", "radar", "oneLineConclusion", "fullAnalysisPath"], "properties": {
+      "matchScore": {"type": ["integer", "null"], "minimum": 0, "maximum": 100},
+      "evaluatedRequirements": {"type": "integer", "minimum": 0}, "totalRequirements": {"type": "integer", "minimum": 1},
+      "topGaps": {"type": "array", "maxItems": 3}, "radar": {"type": "array"},
+      "oneLineConclusion": {"type": "string"}, "fullAnalysisPath": {"type": "string"}
+    }, "additionalProperties": false}
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "evidence": {"type": "object", "required": ["evidenceId", "sourceType", "sourceId", "sourceLocation", "quote", "sha256"], "properties": {
+      "evidenceId": {"type": "string", "pattern": "^E[0-9]{3}$"}, "sourceType": {"enum": ["RESUME", "JD", "TURN"]}, "sourceId": {"type": "string"}, "sourceLocation": {"type": "string"},
+      "quote": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    }, "additionalProperties": false},
+    "requirement": {"type": "object", "required": ["requirementId", "text", "importance", "importanceWeight", "resumeStatus", "resumeScore", "interviewStatus", "interviewScore", "evidence", "rationale"], "properties": {
+      "requirementId": {"type": "string"}, "text": {"type": "string", "minLength": 1},
+      "importance": {"enum": ["CORE", "IMPORTANT", "PREFERRED"]}, "importanceWeight": {"type": "number", "minimum": 1, "maximum": 3},
+      "resumeStatus": {"enum": ["MATCH", "PARTIAL", "NO_EVIDENCE"]}, "resumeScore": {"type": ["number", "null"], "minimum": 0, "maximum": 5},
+      "interviewStatus": {"enum": ["UNASSESSED", "DEMONSTRATED", "PARTIAL", "NOT_DEMONSTRATED"]},
+      "interviewScore": {"type": ["number", "null"], "minimum": 0, "maximum": 5},
+      "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/evidence"}}, "rationale": {"type": "string"}
+    }, "additionalProperties": false},
+    "gap": {"type": "object", "required": ["gapId", "requirementId", "title", "status", "reason", "attribution", "gapSize", "confidence", "priorityScore", "priority", "recommendation", "evidence"], "properties": {
+      "gapId": {"type": "string"}, "requirementId": {"type": "string"}, "title": {"type": "string"},
+      "status": {"enum": ["GAP", "PARTIAL_GAP", "NOT_EVALUATED"]}, "reason": {"type": "string"},
+      "attribution": {"type": "array", "items": {"enum": ["EXPRESSION_GAP"]}}, "gapSize": {"type": "number", "minimum": 0, "maximum": 4},
+      "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "priorityScore": {"type": "number", "minimum": 0},
+      "priority": {"enum": ["HIGH", "MEDIUM", "LOW"]}, "recommendation": {"type": "string"},
+      "evidence": {"type": "array", "items": {"$ref": "#/$defs/evidence"}}
+    }, "additionalProperties": false},
+    "radarAxis": {"type": "object", "required": ["axis", "requirementScore", "resumeScore", "interviewScore"], "properties": {
+      "axis": {"enum": ["SKILLS", "PROJECT_EXPERIENCE", "PROBLEM_SOLVING", "ROLE_RESPONSIBILITIES"]},
+      "requirementScore": {"type": ["integer", "null"], "minimum": 0, "maximum": 5},
+      "resumeScore": {"type": ["number", "null"], "minimum": 0, "maximum": 5},
+      "interviewScore": {"type": ["number", "null"], "minimum": 0, "maximum": 5}
+    }, "additionalProperties": false}
+  }
+}

@@ -65,6 +65,13 @@ interviewmirror:
     enabled: ${INTERVIEW_MODEL_ENABLED:false}
     provider: ${INTERVIEW_MODEL_PROVIDER:QWEN}
     id: ${INTERVIEW_MODEL_ID:qwen-plus-2025-12-01}
+  report:
+    worker-enabled: ${REPORT_WORKER_ENABLED:true}
+    worker-id: ${REPORT_WORKER_ID:report-worker-local}
+    poll-interval: ${REPORT_POLL_INTERVAL:PT2S}
+    lease: ${REPORT_TASK_LEASE:PT5M}
+    timeout: ${REPORT_MODEL_TIMEOUT:PT180S}
+    pdf-font-path: ${PDF_CJK_FONT_PATH:}
 
 logging:
   level:

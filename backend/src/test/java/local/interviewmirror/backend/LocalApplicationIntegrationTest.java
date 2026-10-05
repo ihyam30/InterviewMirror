@@ -7,11 +7,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,6 +45,8 @@ import local.interviewmirror.backend.interviews.InterviewModel;
 import local.interviewmirror.backend.interviews.InterviewTurnType;
 import local.interviewmirror.backend.interviews.InterviewService;
 import local.interviewmirror.backend.interviews.InterviewRepository;
+import local.interviewmirror.backend.reports.ReportModel;
+import local.interviewmirror.backend.reports.ReportService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -60,6 +64,7 @@ class LocalApplicationIntegrationTest {
     @Autowired DeterministicInterviewGraph interviewGraph;
     @Autowired InterviewService interviewService;
     @Autowired InterviewRepository interviewRepository;
+    @Autowired ReportService reportService;
 
     @BeforeEach
     void seedAccounts() {
@@ -147,6 +152,51 @@ class LocalApplicationIntegrationTest {
         mvc.perform(post("/api/v1/interviews/" + interviewId + "/end").session(a.session()).cookie(a.csrfCookie())
                 .header("X-XSRF-TOKEN", a.csrf()).contentType(MediaType.APPLICATION_JSON)
                 .content("{\"clientRequestId\":\"end-replay\"}")).andExpect(status().isOk());
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                jdbc.queryForObject("SELECT COUNT(*) FROM report_tasks WHERE interview_id=? AND task_type='REPORT' AND status='PENDING'", Integer.class, interviewId));
+        JsonNode pendingHistory = json.readTree(mvc.perform(get("/api/v1/reports").session(a.session()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).at("/data/0");
+        org.junit.jupiter.api.Assertions.assertEquals(interviewId.toString(), pendingHistory.path("interviewId").asText());
+        org.junit.jupiter.api.Assertions.assertTrue(pendingHistory.path("id").isNull() || pendingHistory.path("id").isMissingNode());
+        org.junit.jupiter.api.Assertions.assertEquals("PENDING", pendingHistory.path("reportTaskStatus").asText());
+        org.junit.jupiter.api.Assertions.assertFalse(pendingHistory.path("title").asText().isBlank());
+        mvc.perform(get("/api/v1/interviews/" + interviewId + "/report-status").session(b.session())).andExpect(status().isNotFound());
+        org.junit.jupiter.api.Assertions.assertTrue(reportService.processOne("integration-worker", java.time.Duration.ofMinutes(5)));
+        UUID reportId = jdbc.queryForObject("SELECT id FROM interview_reports WHERE interview_id=?", UUID.class, interviewId);
+        org.junit.jupiter.api.Assertions.assertEquals("1.4.0", jdbc.queryForObject(
+                "SELECT schema_version FROM interview_reports WHERE id=?", String.class, reportId));
+        mvc.perform(get("/api/v1/reports/" + reportId).session(a.session())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.report.schemaVersion").value("1.4.0"))
+                .andExpect(jsonPath("$.data.report.summary.overallReviewEvidenceStatus").value("MODEL_SUPPORTED"))
+                .andExpect(jsonPath("$.data.report.summary.oneLineConclusion").doesNotExist())
+                .andExpect(jsonPath("$.data.report.scores.CULTURE_MATCH").doesNotExist());
+        JsonNode completedHistory = json.readTree(mvc.perform(get("/api/v1/reports").session(a.session()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).at("/data/0");
+        org.junit.jupiter.api.Assertions.assertEquals(reportId.toString(), completedHistory.path("id").asText());
+        org.junit.jupiter.api.Assertions.assertEquals("SUCCESS", completedHistory.path("reportTaskStatus").asText());
+        org.junit.jupiter.api.Assertions.assertEquals(1, completedHistory.path("questionCount").asInt());
+        JsonNode otherUserHistory = json.readTree(mvc.perform(get("/api/v1/reports").session(b.session()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("data");
+        org.junit.jupiter.api.Assertions.assertEquals(0, otherUserHistory.size());
+        mvc.perform(get("/api/v1/reports/" + reportId).session(b.session())).andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/interviews/" + interviewId + "/reports/retry").session(b.session())
+                .cookie(b.csrfCookie()).header("X-XSRF-TOKEN", b.csrf())).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/reports/" + reportId + "/gap-analysis").session(a.session()))
+                .andExpect(status().isGone()).andExpect(jsonPath("$.error.code").value("GAP_ANALYSIS_DISABLED"));
+        mvc.perform(get("/api/v1/reports/" + reportId + "/pdf").session(b.session())).andExpect(status().isNotFound());
+        MvcResult pdf = mvc.perform(get("/api/v1/reports/" + reportId + "/pdf").session(a.session()))
+                .andExpect(status().isOk()).andReturn();
+        org.junit.jupiter.api.Assertions.assertTrue(pdf.getResponse().getContentAsByteArray().length > 500);
+
+        String savedContent = jdbc.queryForObject("SELECT content FROM interview_reports WHERE id=?", String.class, reportId);
+        ObjectNode editableContent = (ObjectNode) json.readTree(savedContent);
+        ((ObjectNode) editableContent.path("summary")).put("overallReviewEvidenceStatus", "UNVERIFIED");
+        jdbc.update("UPDATE interview_reports SET content=? WHERE id=?", json.writeValueAsString(editableContent), reportId);
+        mvc.perform(post("/api/v1/interviews/" + interviewId + "/reports/retry").session(a.session())
+                .cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("PENDING"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, jdbc.queryForObject(
+                "SELECT retry_count FROM report_tasks WHERE interview_id=? AND task_type='REPORT'", Integer.class, interviewId));
     }
 
     @Test
@@ -181,6 +231,51 @@ class LocalApplicationIntegrationTest {
                 "SELECT status FROM interviews WHERE id=?", String.class, interviewId));
         org.junit.jupiter.api.Assertions.assertEquals(1,
                 jdbc.queryForObject("SELECT COUNT(*) FROM interview_turns WHERE interview_id=? AND status='SKIPPED'", Integer.class, interviewId));
+    }
+
+    @Test
+    void comprehensiveInterviewWithJdMarksGapAnalysisNotApplicableAndDisablesEndpoints() throws Exception {
+        Session a = login("demo1", "MirrorDemo1!");
+        Session b = login("demo2", "MirrorDemo2!");
+        JsonNode uploaded = uploadDocument("/api/v1/resumes", "report-gap-resume.pdf", "application/pdf", a);
+        UUID resumeId = UUID.fromString(uploaded.path("id").asText());
+        parseWorker.processOne();
+        mvc.perform(post("/api/v1/resumes/" + resumeId + "/confirm").session(a.session())
+                .cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf())).andExpect(status().isOk());
+
+        String create = "{\"schemaVersion\":\"1.1.0\",\"clientRequestId\":\"report-gap-create\","
+                + "\"mode\":\"COMPREHENSIVE\",\"resumeId\":\"" + resumeId
+                + "\",\"jdText\":\"要求 Java 故障排查能力和跨团队协作\",\"locale\":\"zh-CN\",\"modelDataConsent\":true}";
+        MvcResult created = mvc.perform(post("/api/v1/interviews").session(a.session()).cookie(a.csrfCookie())
+                .header("X-XSRF-TOKEN", a.csrf()).contentType(MediaType.APPLICATION_JSON).content(create))
+                .andExpect(status().isOk()).andReturn();
+        UUID interviewId = UUID.fromString(json.readTree(created.getResponse().getContentAsString()).at("/data/id").asText());
+        JsonNode started = json.readTree(mvc.perform(post("/api/v1/interviews/" + interviewId + "/start").session(a.session())
+                .cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf())).andExpect(status().isOk()).andReturn()
+                .getResponse().getContentAsString()).path("data");
+        UUID turnId = UUID.fromString(started.path("activeTurn").path("id").asText());
+        mvc.perform(post("/api/v1/interviews/" + interviewId + "/answers").session(a.session()).cookie(a.csrfCookie())
+                .header("X-XSRF-TOKEN", a.csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"turnId\":\"" + turnId + "\",\"clientRequestId\":\"report-gap-answer\",\"answer\":\"我会检查日志和指标定位问题。\"}"))
+                .andExpect(status().isOk());
+        interviewService.recover();
+        mvc.perform(post("/api/v1/interviews/" + interviewId + "/end").session(a.session()).cookie(a.csrfCookie())
+                .header("X-XSRF-TOKEN", a.csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"clientRequestId\":\"report-gap-end\"}")).andExpect(status().isOk());
+
+        org.junit.jupiter.api.Assertions.assertTrue(reportService.processOne("integration-worker", java.time.Duration.ofMinutes(5)));
+        UUID reportId = jdbc.queryForObject("SELECT id FROM interview_reports WHERE interview_id=?", UUID.class, interviewId);
+        mvc.perform(get("/api/v1/reports/" + reportId).session(a.session())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.report.gapAnalysis.status").value("NOT_APPLICABLE"))
+                .andExpect(jsonPath("$.data.report.gapAnalysis.notApplicableReason").value("FEATURE_DISABLED"));
+        org.junit.jupiter.api.Assertions.assertEquals(0, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM report_tasks WHERE interview_id=? AND task_type='GAP_ANALYSIS'", Integer.class, interviewId));
+        mvc.perform(get("/api/v1/reports/" + reportId + "/gap-analysis").session(a.session()))
+                .andExpect(status().isGone()).andExpect(jsonPath("$.error.code").value("GAP_ANALYSIS_DISABLED"));
+        mvc.perform(get("/api/v1/reports/" + reportId + "/gap-analysis").session(b.session())).andExpect(status().isNotFound());
+        mvc.perform(post("/api/v1/reports/" + reportId + "/gap-analysis/retry").session(a.session())
+                .cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
+                .andExpect(status().isGone()).andExpect(jsonPath("$.error.code").value("GAP_ANALYSIS_DISABLED"));
     }
 
     @Test
@@ -660,6 +755,13 @@ class LocalApplicationIntegrationTest {
         return "{\"schemaVersion\":\"interviewmirror.question-bank-content.v1\",\"questions\":[{\"position\":1,\"stem\":\"How do you validate model output quality?\",\"answer\":\"\"},{\"position\":2,\"stem\":\"How do you handle a failed parsing task?\",\"answer\":\"\"}]}";
     }
 
+    private static String evidenceId(JsonNode context, String sourceType) {
+        for (JsonNode item : context.path("evidenceCandidates")) {
+            if (sourceType.equals(item.path("sourceType").asString())) return item.path("evidenceId").asString();
+        }
+        return null;
+    }
+
     private Session login(String username, String password) throws Exception {
         MvcResult csrfResult = mvc.perform(get("/api/v1/auth/csrf")).andExpect(status().isOk()).andReturn();
         String csrf = json.readTree(csrfResult.getResponse().getContentAsString()).at("/data/token").asText();
@@ -681,6 +783,53 @@ class LocalApplicationIntegrationTest {
         @Bean @Primary MemoryStorage memoryStorage() { return new MemoryStorage(); }
         @Bean @Primary ControlledParser controlledParser() { return new ControlledParser(); }
         @Bean @Primary DeterministicInterviewGraph deterministicInterviewGraph() { return new DeterministicInterviewGraph(); }
+        @Bean @Primary ReportModel deterministicReportModel(ObjectMapper json) {
+            return new ReportModel() {
+                @Override public ReportModel.ReportOutput generateReport(String context) {
+                    try {
+                        JsonNode root = json.readTree(context);
+                        String turnEvidence = evidenceId(root, "TURN");
+                        var evidence = turnEvidence == null ? java.util.List.<String>of() : java.util.List.of(turnEvidence);
+                        var dimensions = java.util.List.of("TECHNICAL_DEPTH", "PROJECT_EXPERIENCE", "JOB_MATCH", "COMMUNICATION",
+                                "LOGICAL_STRUCTURE", "PROBLEM_SOLVING").stream()
+                                .map(key -> new ReportModel.DimensionOutput(key, "ASSESSED", 4, "回答提供了本场证据。", evidence)).toList();
+                        var turns = java.util.stream.StreamSupport.stream(root.path("turns").spliterator(), false)
+                                .map(turn -> new ReportModel.TurnOutput(turn.path("turnId").asString(), "回答能说明基本思路。",
+                                        java.util.List.of("说明了关键步骤"), java.util.List.of("补充验证结果"), evidence)).toList();
+                        return new ReportModel.ReportOutput("本场回答展示了基础工程能力。", 80,
+                                dimensions, turns, java.util.List.of(new ReportModel.InsightOutput("能说明实践步骤。", evidence)),
+                                java.util.List.of(new ReportModel.InsightOutput("结果量化仍可补充。", evidence)),
+                                java.util.List.of(new ReportModel.RecommendationOutput("补充量化验证。", "让判断依据更可复现。", evidence)),
+                                java.util.List.of(new ReportModel.LearningOutput(1, "练习清晰描述验证方法。", java.util.List.of("使用一组固定测试样例复盘。"), evidence)),
+                                evidence);
+                    } catch (Exception error) { throw new IllegalArgumentException("test report context invalid", error); }
+                }
+                @Override public ReportModel.SummaryEvidenceReview verifySummaryEvidence(String context) {
+                    try {
+                        JsonNode root = json.readTree(context);
+                        var overall = java.util.stream.StreamSupport.stream(
+                                root.path("overallReviewProposedEvidenceIds").spliterator(), false)
+                                .map(JsonNode::asString).toList();
+                        return new ReportModel.SummaryEvidenceReview(!overall.isEmpty(), overall);
+                    } catch (Exception error) { throw new IllegalArgumentException("test summary verification context invalid", error); }
+                }
+                @Override public ReportModel.GapOutput generateGapAnalysis(String context) {
+                    try {
+                        JsonNode root = json.readTree(context);
+                        String jdEvidence = evidenceId(root, "JD"), turnEvidence = evidenceId(root, "TURN");
+                        var evidence = new java.util.ArrayList<String>();
+                        if (jdEvidence != null) evidence.add(jdEvidence);
+                        if (turnEvidence != null) evidence.add(turnEvidence);
+                        return new ReportModel.GapOutput(java.util.List.of(new ReportModel.RequirementOutput(
+                                "Java 技术问题分析能力", "CORE", null, 4d, .85,
+                                "本场回答说明了定位过程。", "补充项目中的实际处理案例。", evidence)));
+                    } catch (Exception error) { throw new IllegalArgumentException("test gap context invalid", error); }
+                }
+                @Override public boolean isConfigured() { return true; }
+                @Override public String provider() { return "TEST"; }
+                @Override public String modelId() { return "deterministic-report"; }
+            };
+        }
         @Bean @Primary InterviewModel deterministicInterviewModel() {
             return new InterviewModel() {
                 @Override public java.util.List<PlannedQuestion> generateComprehensivePlan(String resume, String jd, int count) {

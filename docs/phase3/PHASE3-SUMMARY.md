@@ -2,7 +2,7 @@
 
 ## 当前范围
 
-本阶段把模拟面试从前端固定脚本接入 Spring Boot API、PostgreSQL 持久化、LangGraph4j checkpoint、Spring AI OpenAI-compatible 模型适配器和持久化 SSE。当前不生成评分报告、岗位差异分析或 PDF；完成页明确显示本场问答记录已保存、报告能力尚未接入。
+本阶段把模拟面试从前端固定脚本接入 Spring Boot API、PostgreSQL 持久化、LangGraph4j checkpoint、Spring AI OpenAI-compatible 模型适配器和持久化 SSE。阶段 3 的交付边界是不生成评分报告、岗位差异分析或 PDF；报告已在阶段 4 接入，当前契约和流程见 `docs/phase4/`。
 
 ## 已实现接口
 

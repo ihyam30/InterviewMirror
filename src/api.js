@@ -194,6 +194,46 @@ export async function endInterview(id, clientRequestId) {
   })
 }
 
+export async function listReports() {
+  return request('/api/v1/reports')
+}
+
+export async function deleteInterviewReport(interviewId) {
+  return request(`/api/v1/interviews/${encodeURIComponent(interviewId)}/report`, { method: 'DELETE' })
+}
+
+export async function getReport(id) {
+  return request(`/api/v1/reports/${encodeURIComponent(id)}`)
+}
+
+export async function getInterviewReportStatus(interviewId) {
+  return request(`/api/v1/interviews/${encodeURIComponent(interviewId)}/report-status`)
+}
+
+export async function requestInterviewReport(interviewId) {
+  return request(`/api/v1/interviews/${encodeURIComponent(interviewId)}/reports`, { method: 'POST' })
+}
+
+export async function retryInterviewReport(interviewId) {
+  return request(`/api/v1/interviews/${encodeURIComponent(interviewId)}/reports/retry`, { method: 'POST' })
+}
+
+export async function downloadReportPdf(reportId) {
+  let response
+  try {
+    response = await fetch(`/api/v1/reports/${encodeURIComponent(reportId)}/pdf`, { credentials: 'include' })
+  } catch {
+    throw new ApiError(0, 'BACKEND_UNAVAILABLE', '无法连接本地服务，请确认后端已启动。')
+  }
+  if (response.status === 401) clearExpiredSession()
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new ApiError(response.status, payload?.error?.code || 'REPORT_PDF_FAILED',
+      payload?.error?.message || '报告 PDF 下载失败。')
+  }
+  return response.blob()
+}
+
 export function openInterviewEvents(id) {
   if (typeof EventSource === 'undefined') return null
   return new EventSource(`/api/v1/interviews/${encodeURIComponent(id)}/events`, { withCredentials: true })

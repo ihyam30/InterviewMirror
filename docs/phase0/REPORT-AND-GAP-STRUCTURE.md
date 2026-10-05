@@ -1,7 +1,6 @@
 # 报告与岗位差异分析结构
 
-> 版本：`interviewmirror.report-contract.v1.0.0`  
-> JSON Schema：`schemas/report.v1.schema.json`、`schemas/gap-analysis.v1.schema.json`、`schemas/interview-request.v1.schema.json`。Schema 版本与 Prompt、模型版本分别管理；破坏性字段变更升主版本。
+> 历史基线：`interviewmirror.report-contract.v1.0.0`。本文件记录阶段 0 的初始契约；当前以 [阶段 4 报告 Schema 1.4.0](../phase4/schemas/report.v1.4.schema.json) 为准：保留总体评价，不单独生成一句话结论；协作方式匹配和岗位差异分析均已从当前报告中移除。较早 Schema 仅用于读取历史报告。Schema 版本与 Prompt、模型版本分别管理；破坏性字段变更升主版本。
 
 ## 1. 面试报告
 

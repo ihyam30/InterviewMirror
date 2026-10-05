@@ -20,6 +20,8 @@ interviewmirror:
     enabled: false
   mineru:
     poll-interval: PT1H
+  report:
+    worker-enabled: false
 logging:
   level:
     root: WARN

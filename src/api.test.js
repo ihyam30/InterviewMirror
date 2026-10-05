@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { currentUser, login, logout, refreshCsrf, ApiError } from './api.js'
+import { currentUser, login, logout, refreshCsrf, ApiError, listReports, getReport,
+  getInterviewReportStatus, requestInterviewReport, retryInterviewReport, downloadReportPdf } from './api.js'
 import { cancelPendingReview } from './pending-review.js'
 import { canReviewDocument, canRetryDocument, canUseDocument, documentStatusLabel } from './document-state.js'
 import { answerInterview, createDocument, createInterview, endInterview, getInterview, getInterviewTurns,
@@ -131,6 +132,31 @@ test('interview API uses authenticated JSON requests for lifecycle and idempoten
     turnId: 'turn-1', clientRequestId: 'answer-request-1', answer: 'candidate answer',
   })
   assert.equal(calls[5].options.credentials, 'include')
+})
+
+test('report APIs use owner-authenticated routes and PDF download returns the binary response', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url, options })
+    if (url.endsWith('/pdf')) return new Response(new Blob(['%PDF-1.7']), { status: 200, headers: { 'Content-Type': 'application/pdf' } })
+    return json({ data: null })
+  }
+
+  await listReports()
+  await getReport('report/1')
+  await getInterviewReportStatus('interview/1')
+  await requestInterviewReport('interview/1')
+  await retryInterviewReport('interview/1')
+  const pdf = await downloadReportPdf('report/1')
+
+  assert.equal(calls[0].url, '/api/v1/reports')
+  assert.equal(calls[1].url, '/api/v1/reports/report%2F1')
+  assert.equal(calls[2].url, '/api/v1/interviews/interview%2F1/report-status')
+  assert.equal(calls[3].url, '/api/v1/interviews/interview%2F1/reports')
+  assert.equal(calls[4].options.method, 'POST')
+  assert.equal(calls[5].url, '/api/v1/reports/report%2F1/pdf')
+  assert.equal(calls[5].options.credentials, 'include')
+  assert.equal(pdf.type, 'application/pdf')
 })
 
 test('resume review can edit project details without dropping parsed technologies or outcomes', () => {

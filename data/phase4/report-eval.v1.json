@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "interviewmirror.phase4-report-evaluation.v1",
+  "syntheticOnly": true,
+  "cases": [
+    {
+      "id": "R01", "mode": "COMPREHENSIVE", "completionReason": "TARGET_REACHED", "title": "Java API 面试",
+      "jdText": "要求：Java 后端开发，熟悉 REST API、SQL 优化与团队协作。",
+      "resume": {"name": "林同学", "skills": ["Java", "Spring Boot", "PostgreSQL"], "projects": [{"name": "课程预约服务", "description": "实现预约 REST API 和容量校验。"}]},
+      "turns": [{"question": "如何避免预约接口重复提交？", "answer": "我会用用户和业务单号生成幂等键，在数据库建立唯一约束，并通过集成测试验证并发提交只产生一条预约。"}],
+      "expected": {"gapApplicable": true}
+    },
+    {
+      "id": "R02", "mode": "COMPREHENSIVE", "completionReason": "TARGET_REACHED", "title": "缓存与数据库面试",
+      "jdText": "要求：设计缓存一致性方案，定位线上性能问题，能与产品和前端协作。",
+      "resume": {"name": "周同学", "skills": ["Redis", "MySQL", "Java"], "projects": [{"name": "商品目录", "description": "维护缓存和数据库读路径。"}]},
+      "turns": [{"question": "更新数据库后如何处理缓存？", "answer": "先提交数据库事务，再删除缓存；若删除失败则写入可靠重试任务，并监控失败队列。读路径采用缓存空值和短 TTL 防止击穿。"}],
+      "expected": {"gapApplicable": true}
+    },
+    {
+      "id": "R03", "mode": "COMPREHENSIVE", "completionReason": "TARGET_REACHED", "title": "检索服务面试",
+      "jdText": "要求：构建文档检索服务，维护评测集，并异步与团队成员沟通设计决定。",
+      "resume": {"name": "陈同学", "skills": ["Python", "向量检索", "评测"], "projects": [{"name": "文档检索", "description": "搭建离线检索评测流水线。"}]},
+      "turns": [{"question": "如何判断检索改动确实提升了效果？", "answer": "固定一份人工标注问题集，比较 Recall@5 和引用准确率；每次只改变一个参数，保存数据集版本和结果，并抽样复核边界案例。"}],
+      "expected": {"gapApplicable": true}
+    },
+    {
+      "id": "R04", "mode": "COMPREHENSIVE", "completionReason": "TARGET_REACHED", "title": "服务可靠性面试",
+      "jdText": "要求：建设可观测的后端服务，能够分析超时、重试和故障恢复。",
+      "resume": {"name": "吴同学", "skills": ["Spring Boot", "OpenTelemetry", "PostgreSQL"], "projects": [{"name": "订单服务", "description": "增加链路追踪与失败重试。"}]},
+      "turns": [{"question": "下游请求超时后你会怎么处理？", "answer": "先按 traceId 检查调用链和下游耗时，再区分连接超时与响应超时。仅对可重试错误做有界指数退避；写操作用幂等键，超出预算进入失败状态并告警。"}],
+      "expected": {"gapApplicable": true}
+    },
+    {
+      "id": "R05", "mode": "COMPREHENSIVE", "completionReason": "TARGET_REACHED", "title": "团队协作面试",
+      "jdText": "要求：跨时区异步协作，维护 PR 和设计文档，主动升级阻塞。",
+      "resume": {"name": "赵同学", "skills": ["Git", "代码评审", "技术文档"], "projects": [{"name": "支付接入", "description": "通过 PR 与设计文档协作。"}]},
+      "turns": [{"question": "异步协作中遇到阻塞如何推进？", "answer": "我会在 PR 或设计记录中写清背景、方案、风险和待决问题，标明负责人及截止时间；阻塞可能影响交付时同步相关成员并给出选项，最终记录决定和后续行动。"}],
+      "expected": {"gapApplicable": true}
+    },
+    {
+      "id": "R06", "mode": "COMPREHENSIVE", "completionReason": "TARGET_REACHED", "title": "系统设计面试",
+      "jdText": "要求：设计高并发文件服务，理解对象存储、数据库事务和权限隔离。",
+      "resume": {"name": "孙同学", "skills": ["对象存储", "事务", "访问控制"], "projects": [{"name": "文件服务", "description": "提供上传、下载和访问控制。"}]},
+      "turns": [
+        {"question": "数据库记录与对象存储如何保持一致？", "answer": "先上传带随机键的对象，再事务写入元数据；如果数据库写入失败就删除对象补偿。删除则先标记删除中，成功删除对象后再移除元数据，失败任务可以重试。"},
+        {"question": "怎样避免用户访问其他人的文件？", "answer": "每次按当前认证用户和文件 ID 同时查询 owner，下载前做同样检查；对象桶私有，客户端不直接拿可猜测的永久地址。"}
+      ],
+      "expected": {"gapApplicable": true}
+    },
+    {
+      "id": "R07", "mode": "COMPREHENSIVE", "completionReason": "USER_ENDED", "title": "提前结束面试",
+      "jdText": "",
+      "resume": {"name": "郑同学", "skills": ["Java", "测试"], "projects": [{"name": "任务管理器", "description": "实现任务状态管理。"}]},
+      "turns": [{"question": "你如何验证一个并发修改功能？", "answer": "我会写并发集成测试，同时检查数据库最终状态和重复请求行为。"}],
+      "expected": {"gapApplicable": false, "earlyEnded": true}
+    },
+    {
+      "id": "R08", "mode": "QUESTION_BANK", "completionReason": "TARGET_REACHED", "title": "题库专项面试",
+      "jdText": "要求：后端开发。",
+      "resume": {"name": "钱同学", "skills": ["Java", "JVM"], "projects": [{"name": "缓存实验", "description": "比较缓存策略。"}]},
+      "turns": [{"question": "什么情况下会发生缓存雪崩？", "answer": "大量 key 同时过期或缓存服务故障可能造成请求回源。我会加随机过期时间、限流和必要的降级，并用监控检查数据库负载。"}],
+      "expected": {"gapApplicable": false}
+    },
+    {
+      "id": "R09", "mode": "COMPREHENSIVE", "completionReason": "TARGET_REACHED", "title": "数据分析服务面试",
+      "jdText": "要求：用 SQL 构建可靠报表，验证数据准确性，并与业务方确认口径。",
+      "resume": {"name": "何同学", "skills": ["SQL", "数据校验", "沟通"], "projects": [{"name": "运营报表", "description": "维护指标计算和校验规则。"}]},
+      "turns": [{"question": "如何确保报表指标可信？", "answer": "先与业务方确认分子分母、时区和去重口径；再准备覆盖边界情况的样例，用独立 SQL 对账，发现偏差时记录数据版本和复核结论。"}],
+      "expected": {"gapApplicable": true}
+    },
+    {
+      "id": "R10", "mode": "COMPREHENSIVE", "completionReason": "USER_ENDED", "title": "证据不足与部分评估",
+      "jdText": "要求：解决复杂生产故障，并能推动跨团队协作。",
+      "resume": {"name": "蒋同学", "skills": ["Java"], "projects": []},
+      "turns": [{"question": "请举例说明你如何定位复杂线上故障。", "answer": "我暂时没有相关经历。"}],
+      "expected": {"gapApplicable": true, "earlyEnded": true, "sparseEvidence": true}
+    }
+  ]
+}

@@ -8,8 +8,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import local.interviewmirror.backend.common.ApiException;
 import org.springframework.dao.DuplicateKeyException;
+import local.interviewmirror.backend.common.ApiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -258,6 +258,7 @@ public class InterviewRepository {
                       completed_at=COALESCE(completed_at,CURRENT_TIMESTAMP), updated_at=CURRENT_TIMESTAMP,
                       state_version=state_version+1 WHERE id=? AND owner_id=? AND status='COMPLETING'
                     """, reason, interviewId, ownerId);
+            enqueueReportTask(ownerId, interviewId);
             event(interviewId, ownerId, "interview.completed", Map.of("reason", reason));
             return findOwned(ownerId, interviewId);
         }
@@ -355,8 +356,15 @@ public class InterviewRepository {
                   updated_at=CURRENT_TIMESTAMP, state_version=state_version+1
                 WHERE id=? AND owner_id=? AND status='COMPLETING'
                 """, interviewId, ownerId);
+        enqueueReportTask(ownerId, interviewId);
         event(interviewId, ownerId, "interview.completed", Map.of("reason", "USER_ENDED"));
         return findOwned(ownerId, interviewId);
+    }
+
+    private void enqueueReportTask(UUID ownerId, UUID interviewId) {
+        jdbc.update("INSERT INTO report_tasks(id, interview_id, owner_id, task_type, status) "
+                        + "VALUES (?, ?, ?, 'REPORT', 'PENDING')",
+                UUID.randomUUID(), interviewId, ownerId);
     }
 
     public List<InterviewRecord> staleCompletingInterviews(Instant before) {

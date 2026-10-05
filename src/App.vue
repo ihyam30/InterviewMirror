@@ -1,8 +1,9 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { currentUser as fetchCurrentUser, confirmDocument, createDocument, createQuestionBank, deleteDocument, downloadFile, getDocument, listDocuments, login as apiLogin, logout as apiLogout, retryDocument, updateDocument, validateInterviewSource, createInterview, listInterviews, getInterview, startInterview, getInterviewTurns, answerInterview, replaceInterviewQuestion, endInterview, openInterviewEvents } from './api.js'
+import { currentUser as fetchCurrentUser, confirmDocument, createDocument, createQuestionBank, deleteDocument, deleteInterviewReport, downloadFile, getDocument, listDocuments, login as apiLogin, logout as apiLogout, retryDocument, updateDocument, validateInterviewSource, createInterview, listInterviews, getInterview, startInterview, getInterviewTurns, answerInterview, replaceInterviewQuestion, endInterview, openInterviewEvents, listReports as apiListReports, getReport as apiGetReport, getInterviewReportStatus, requestInterviewReport, retryInterviewReport, downloadReportPdf } from './api.js'
 import { canReviewDocument, canRetryDocument, documentStatusLabel } from './document-state.js'
 import { resumeViewModel } from './resume-display.js'
+import { reportTaskLabel, visibleReportScores } from './report-display.js'
 
 const navItems = [
   { id: 'home', label: '工作台', icon: 'home' },
@@ -12,68 +13,46 @@ const navItems = [
   { id: 'resumes', label: '我的简历', icon: 'resume' },
 ]
 
-const seedReports = [
-  {
-    id: 'report-0930', title: 'AI 应用工程师实习', mode: '综合面试', date: '2026年9月30日 · 14:20', duration: '28 分钟', questionCount: 7,
-    resumeId: 'resume-1', jdText: '负责企业级知识库与智能问答应用建设；持续评估并优化大模型应用效果；熟悉服务部署、监控及异常处理。',
-    overallScore: 82, overall: '基础扎实，能结合项目解释 RAG 检索链路。可以进一步补充评估指标和线上效果，让回答更有说服力。',
-    hasJD: true, matchScore: 78, coverage: '8 / 10 项已评估', oneLine: '项目经历与岗位方向较匹配，线上评估与稳定性证据仍需补强。',
-    scores: [
-      { label: '技术深度', score: 4.1, note: 'RAG 检索链路解释清楚，重排策略还可展开。' },
-      { label: '项目经验', score: 4.3, note: '能讲清个人负责内容，建议量化业务结果。' },
-      { label: '问题解决', score: 3.8, note: '排查思路完整，缺少对方案取舍的说明。' },
-      { label: '岗位匹配', score: 4.0, note: '核心技能覆盖较好，评估和监控证据不足。' },
-      { label: '表达逻辑', score: 3.7, note: '结论明确，部分回答背景铺垫偏长。' },
-    ],
-    gaps: [
-      { title: '缺少线上效果评估闭环', group: '实际表现差距', priority: '高', requirement: '建立离线评估集并跟踪线上反馈', evidence: 'JD · 任职要求第 3 条', detail: '你提到了召回率优化，但尚未说明如何构造评估集、设定指标或持续监控效果。' },
-      { title: '项目结果缺少量化指标', group: '简历证据差距', priority: '高', requirement: '用数据说明项目效果和个人贡献', evidence: '简历 · 项目经历 1', detail: '简历描述了检索链路实现，但没有展示准确率、延迟或使用效果的变化。' },
-      { title: '缺少模型服务稳定性方案', group: '实际表现差距', priority: '中', requirement: '具备超时、重试与降级处理经验', evidence: '回答 · 第 6 题', detail: '回答中提及重试，但没有说明超时边界、幂等策略和降级方案。' },
-    ],
-    turns: [
-      { question: '请介绍一下你简历中的知识库问答项目，你负责了哪些部分？', answer: '我主要负责 RAG 检索链路，从文档切分、向量化到召回和重排都做了实现。项目里我还加了一个基于规则的查询改写。', note: '项目职责说明清楚。可以补充项目规模、评估方法和最终效果。', score: 4 },
-      { question: '为什么在向量检索之后还要做重排？', answer: '向量召回更关注语义相似度，可能会把主题相关但不能回答问题的片段排前面。重排模型会结合问题和候选片段重新计算相关性。', note: '概念解释准确。建议举一个实际误召回案例。', score: 4 },
-      { question: '你如何验证一次检索策略调整确实让回答更好？', answer: '我会先准备一批问题，再看召回的文档对不对。如果有错误，我会调整切分长度和召回数量。', note: '有评估意识，但需要定义标注集、指标和迭代前后的对比方式。', score: 3 },
-    ],
-    strengths: ['RAG 核心链路理解完整', '能清楚区分个人职责与团队成果', '回答有技术细节，能说明方案选择'],
-    weaknesses: ['项目结果缺少量化证据', '评估集与线上监控方法不够具体', '部分回答的背景铺垫偏长'],
-    suggestions: ['为项目补充 20–30 条固定评估问题，记录 Recall@K 与答案引用正确率。', '梳理一次线上故障或误召回案例，用“现象—定位—取舍—结果”复盘。', '练习先用一句话给结论，再用项目事实展开。'],
-    learning: ['第 1 周：补全 RAG 离线评测集与指标', '第 2 周：实践模型服务超时、重试和降级', '第 3 周：围绕 JD 做一次完整项目复盘演练'],
-  },
-  {
-    id: 'report-0928', title: 'AI 全栈开发实习', mode: '题库专项', date: '2026年9月28日 · 19:05', duration: '21 分钟', questionCount: 6,
-    bankId: 'bank-2',
-    overallScore: 76, overall: '后端与模型接入基础不错。建议强化前后端协作、接口边界和项目交付中的工程化表达。',
-    hasJD: false, matchScore: null, coverage: null, oneLine: null,
-    scores: [
-      { label: '技术深度', score: 3.8, note: '基础概念准确，可增加设计取舍。' },
-      { label: '项目经验', score: 3.9, note: '经历相关，缺少交付结果量化。' },
-      { label: '问题解决', score: 3.6, note: '能说明排查步骤，可补充边界条件。' },
-      { label: '岗位匹配', score: null, note: '专项面试不评估岗位匹配。' },
-      { label: '表达逻辑', score: 3.7, note: '表达自然，建议减少重复信息。' },
-    ],
-    gaps: [],
-    turns: [
-      { question: '前端如何处理一个长时间运行的 AI 生成请求？', answer: '我会用 SSE 把增量结果推到页面，后端保存生成状态，页面显示当前进度。', note: '回答切中重点，可以补充断线后的恢复策略。', score: 4 },
-      { question: '你会怎样设计模型 API 的超时与重试？', answer: '根据模型服务设置超时，失败后可以重试。如果多次失败，可以提示用户再试。', note: '基础方向正确，需补充幂等、退避和费用控制。', score: 3 },
-    ],
-    strengths: ['具备端到端产品实现意识', '熟悉 SSE 等交互方式'],
-    weaknesses: ['异常和重试策略描述较笼统', '项目交付效果缺少数据'],
-    suggestions: ['准备一次从 Vue 页面到 Java API 再到模型服务的请求链路图。', '补充模型调用的超时、重试、限流和成本统计方案。'],
-    learning: ['练习完整描述一条 AI 请求的端到端数据流。', '为现有项目补充接口错误与重试策略。'],
-  },
-]
-
 const resumes = ref([])
 const banks = ref([])
-const reports = ref([...seedReports])
+const reports = ref([])
+const deletingReportInterviews = ref(new Set())
+const reportDetails = ref({})
 const page = ref('home')
-const selectedNav = computed(() => (['reportDetail', 'gapDetail'].includes(page.value) ? 'reports' : page.value === 'resumeDetail' ? 'resumes' : page.value))
+const selectedNav = computed(() => (page.value === 'reportDetail' ? 'reports' : page.value === 'resumeDetail' ? 'resumes' : page.value))
 const selectedResumeDetailId = ref(null)
 const activeResume = computed(() => resumes.value.find((resume) => resume.id === selectedResumeDetailId.value) ?? null)
 const activeResumeView = computed(() => activeResume.value ? resumeViewModel(activeResume.value.content, activeResume.value.name) : null)
-const selectedReportId = ref(reports.value[0]?.id ?? null)
-const currentReport = computed(() => reports.value.find((report) => report.id === selectedReportId.value) ?? reports.value[0])
+const selectedReportId = ref(null)
+const currentReport = computed(() => reportDetails.value[selectedReportId.value]
+  ?? reports.value.find((report) => report.id === selectedReportId.value)
+  ?? null)
+const reportRadar = computed(() => {
+  const scores = currentReport.value?.scores || []
+  const centerX = 120, centerY = 92, radius = 58
+  const dimensionCount = Math.max(scores.length, 1)
+  const points = scores.map((item, index) => {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / dimensionCount
+    const distance = item.score == null ? null : radius * (item.score / 5)
+    return {
+      ...item,
+      x: centerX + Math.cos(angle) * (distance ?? 0),
+      y: centerY + Math.sin(angle) * (distance ?? 0),
+      axisX: centerX + Math.cos(angle) * radius,
+      axisY: centerY + Math.sin(angle) * radius,
+      labelX: centerX + Math.cos(angle) * (radius + 19),
+      labelY: centerY + Math.sin(angle) * (radius + 19),
+    }
+  })
+  const gridPolygons = [1, 0.75, 0.5].map((scale) => points.map((point, index) => {
+    const angle = -Math.PI / 2 + (Math.PI * 2 * index) / dimensionCount
+    return `${centerX + Math.cos(angle) * radius * scale},${centerY + Math.sin(angle) * radius * scale}`
+  }).join(' '))
+  return { points, gridPolygons, polygon: points.length >= 3 && points.every((item) => item.score != null)
+    ? points.map((item) => `${item.x},${item.y}`).join(' ') : '' }
+})
+const reportStatus = ref(null)
+const reportBusy = ref(false)
 const mode = ref('COMPREHENSIVE')
 const selectedResumeId = ref(resumes.value.find((resume) => resume.default)?.id ?? resumes.value[0]?.id ?? '')
 const selectedBankId = ref(banks.value[0]?.id ?? '')
@@ -84,6 +63,10 @@ const isThinking = ref(false)
 const messages = ref([])
 const turns = ref([])
 const activeInterview = ref(null)
+const lastCompletedInterviewId = ref(null)
+const reportPollingInterviewId = ref(null)
+const showReturnToCompletedResult = ref(false)
+const reportPollingError = ref('')
 const modelDataConsent = ref(false)
 const pendingInterviewId = ref(null)
 const pendingAnswerRequest = ref(null)
@@ -98,6 +81,11 @@ const resumeInput = ref(null)
 const bankInput = ref(null)
 let toastTimer
 let interviewEvents = null
+let reportPollTimer
+let reportHistoryPollTimer
+let reportPollFailureCount = 0
+let reportHistoryRequest = null
+let reportHistoryRevision = 0
 const parseTimers = new Map()
 const authReady = ref(false)
 const currentUserInfo = ref(null)
@@ -181,6 +169,7 @@ async function refreshInterview(interviewId, { restore = false } = {}) {
     page.value = 'practice'
   }
   if (interview.status === 'COMPLETE') {
+    lastCompletedInterviewId.value = interviewId
     closeInterviewEvents()
     interviewStage.value = 'complete'
     pendingEndRequest.value = null
@@ -235,8 +224,11 @@ async function loadOwnedResources() {
 onMounted(async () => {
   try {
     currentUserInfo.value = await fetchCurrentUser()
+    restoreExplicitReportReturn()
     await loadOwnedResources()
-    const recent = (await listInterviews()).find((item) => item.status === 'RUNNING')
+    await loadReportHistory()
+    const interviewRows = await listInterviews()
+    const recent = interviewRows.find((item) => item.status === 'RUNNING')
     if (recent) {
       await refreshInterview(recent.id, { restore: true })
       connectInterviewEvents(recent.id)
@@ -254,7 +246,9 @@ async function submitLogin() {
   try {
     currentUserInfo.value = await apiLogin(loginForm.value.identifier.trim(), loginForm.value.password)
     loginForm.value.password = ''
+    restoreExplicitReportReturn()
     await loadOwnedResources()
+    await loadReportHistory()
   } catch (error) {
     loginError.value = error.message
   } finally {
@@ -264,13 +258,30 @@ async function submitLogin() {
 
 async function signOut() {
   closeInterviewEvents()
+  clearInterval(reportPollTimer)
+  clearInterval(reportHistoryPollTimer)
+  reportPollingInterviewId.value = null
+  lastCompletedInterviewId.value = null
+  clearExplicitReportReturn()
+  showReturnToCompletedResult.value = false
+  reportPollingError.value = ''
   try { await apiLogout() } catch { /* clear local view even if the server is unreachable */ }
   currentUserInfo.value = null
   resumes.value = []
   banks.value = []
+  reports.value = []
+  reportDetails.value = {}
+  selectedReportId.value = null
 }
 
 function handleExpiredSession() {
+  clearInterval(reportPollTimer)
+  clearInterval(reportHistoryPollTimer)
+  reportPollingInterviewId.value = null
+  lastCompletedInterviewId.value = null
+  clearExplicitReportReturn()
+  showReturnToCompletedResult.value = false
+  reportPollingError.value = ''
   currentUserInfo.value = null
   resumes.value = []
   banks.value = []
@@ -281,23 +292,161 @@ window.addEventListener('interviewmirror-auth-expired', handleExpiredSession)
 onUnmounted(() => window.removeEventListener('interviewmirror-auth-expired', handleExpiredSession))
 onUnmounted(() => parseTimers.forEach((timer) => clearTimeout(timer)))
 onUnmounted(closeInterviewEvents)
+onUnmounted(() => clearInterval(reportPollTimer))
+onUnmounted(() => clearInterval(reportHistoryPollTimer))
 
 const pageHeading = computed(() => ({
   home: ['工作台', '为下一场面试，先练一次。'],
   practice: ['模拟面试', '选择练习方式，开始一场专注的模拟面试。'],
   reports: ['历史报告', '回看每一次练习，找到持续进步的证据。'],
   reportDetail: ['面试复盘', '把表现拆解清楚，让下一次准备更有方向。'],
-  gapDetail: ['岗位差异分析', '从岗位要求、简历证据和面试表现中定位差距。'],
   banks: ['自定义题库', '整理你的题目，在专项面试中逐题练习。'],
   resumes: ['我的简历', '查看解析后的简历内容，确认后即可用于综合面试。'],
   resumeDetail: ['简历详情', '查看本地解析出的简历内容与个人经历。'],
 }[page.value] ?? ['工作台', '']))
 
-const comprehensiveCount = computed(() => reports.value.filter((report) => report.mode === '综合面试').length)
+const comprehensiveCount = computed(() => reports.value.filter((report) => report.modeCode === 'COMPREHENSIVE').length)
 const averageScore = computed(() => {
-  if (!reports.value.length) return '—'
-  return Math.round(reports.value.reduce((total, report) => total + report.overallScore, 0) / reports.value.length)
+  const scored = reports.value.filter((report) => Number.isFinite(report.overallScore))
+  if (!scored.length) return '—'
+  return Math.round(scored.reduce((total, report) => total + report.overallScore, 0) / scored.length)
 })
+const generatedReportCount = computed(() => reports.value.filter((report) => report.id).length)
+const reportStatusLabel = computed(() => {
+  if (reportPollingError.value) return '暂时无法获取报告状态'
+  const status = reportStatus.value?.reportTask?.status
+  if (status === 'PENDING') return '报告排队中'
+  if (status === 'PROCESSING') return '正在生成报告'
+  if (status === 'FAILED') return '报告生成失败'
+  if (status === 'SUCCESS') return '报告已生成'
+  return '等待报告任务'
+})
+
+function formatReportDate(value) {
+  if (!value) return '时间未知'
+  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
+function mapReportSummary(item) {
+  const report = item.report || item
+  const summary = report.summary || {}
+  const modeCode = report.mode || item.mode || 'COMPREHENSIVE'
+  const scores = visibleReportScores(report.scores || {}, modeCode).map(([key, score]) => ({
+    key, label: scoreLabels[key] || key, score: score.status === 'ASSESSED' ? score.value : null,
+    status: score.status,
+    note: score.status === 'UNASSESSED'
+      ? '本场没有足够的直接面试证据，无法评估此项。可重新评估报告；若本场没有相关回答，该维度会继续保持未评估。'
+      : score.status === 'NOT_APPLICABLE' ? '此维度不适用于本场面试。' : score.rationale || '',
+    evidence: score.evidence || [],
+  }))
+  return {
+    id: item.id || report.reportId,
+    interviewId: item.interviewId || report.interviewId,
+    title: report.title || item.title || '面试报告',
+    modeCode,
+    mode: modeCode === 'QUESTION_BANK' ? '题库专项' : '综合面试',
+    date: formatReportDate(item.completedAt || report.completedAt),
+    questionCount: Number.isInteger(item.questionCount) ? item.questionCount : Array.isArray(report.turns) ? report.turns.length : 0,
+    overallScore: Number.isFinite(summary.overallScore) ? summary.overallScore : Number.isFinite(item.overallScore) ? item.overallScore : null,
+    overall: summary.overallReview || '报告生成中',
+    overallEvidence: summary.overallReviewEvidence || [],
+    overallReviewEvidenceStatus: summary.overallReviewEvidenceStatus || item.overallReviewEvidenceStatus || null,
+    scores,
+    hasUnassessedDimensions: item.hasUnassessedDimensions === true || scores.some((score) => score.status === 'UNASSESSED'),
+    turns: (report.turns || []).map((turn) => ({
+      id: turn.turnId, question: turn.question, answer: turn.answer, note: turn.feedback,
+      strengths: turn.strengths || [], improvements: turn.improvements || [], evidence: turn.evidence || [],
+    })),
+    strengths: (report.strengths || []).map((entry) => typeof entry === 'string' ? entry : entry.text),
+    weaknesses: (report.risks || []).map((entry) => typeof entry === 'string' ? entry : entry.text),
+    suggestions: (report.recommendations || []).map((entry) => `${entry.action}${entry.why ? `：${entry.why}` : ''}`),
+    learning: (report.learningPath || []).map((entry) => `${entry.objective}${entry.activities?.length ? `：${entry.activities.join('；')}` : ''}`),
+    raw: report,
+    sourceSnapshot: item.sourceSnapshot || {},
+    jdText: item.sourceSnapshot?.jdText || '',
+    resumeId: report.sourceSnapshot?.resumeSnapshotId || '',
+    bankId: report.sourceSnapshot?.questionBankSnapshotId || '',
+    reportStatus: report.status || item.reportStatus || item.status || null,
+    reportTaskStatus: item.reportTaskStatus || (item.id || report.reportId ? 'SUCCESS' : 'PENDING'),
+    reportErrorMessage: item.reportErrorMessage || '',
+  }
+}
+
+const scoreLabels = {
+  TECHNICAL_DEPTH: '技术深度', PROJECT_EXPERIENCE: '项目经验', JOB_MATCH: '岗位匹配',
+  COMMUNICATION: '沟通表达', LOGICAL_STRUCTURE: '逻辑结构', PROBLEM_SOLVING: '问题解决',
+}
+
+async function loadReportHistory() {
+  if (reportHistoryRequest) return reportHistoryRequest
+  const requestRevision = reportHistoryRevision
+  reportHistoryRequest = (async () => {
+    const rows = await apiListReports()
+    if (requestRevision !== reportHistoryRevision) return
+    reports.value = rows.map((row) => mapReportSummary(row))
+    if (!selectedReportId.value || !reports.value.some((row) => row.id === selectedReportId.value)) {
+      selectedReportId.value = reports.value.find((row) => row.id)?.id || null
+    }
+  })()
+  try { await reportHistoryRequest }
+  finally { reportHistoryRequest = null }
+}
+
+async function pollCompletedReport() {
+  const interviewId = reportPollingInterviewId.value
+  if (!interviewId) return
+  try {
+    let status = await getInterviewReportStatus(interviewId)
+    if (!status.reportTask) {
+      await requestInterviewReport(interviewId)
+      status = await getInterviewReportStatus(interviewId)
+    }
+    reportStatus.value = status
+    reportPollingError.value = ''
+    reportPollFailureCount = 0
+    if (status.reportId && status.reportTask?.status === 'SUCCESS') await loadReportHistory()
+    const reportDone = ['SUCCESS', 'FAILED'].includes(status.reportTask?.status)
+    if (reportDone) {
+      clearInterval(reportPollTimer)
+      reportPollTimer = undefined
+    }
+  } catch (error) {
+    reportPollingError.value = `暂时无法读取报告进度：${error.message || '后端连接失败'}。可以重新检查状态。`
+    reportPollFailureCount += 1
+    if (reportPollFailureCount >= 5) {
+      clearInterval(reportPollTimer)
+      reportPollTimer = undefined
+    }
+  }
+}
+
+function startReportPolling(interviewId = lastCompletedInterviewId.value) {
+  if (!interviewId) return
+  clearInterval(reportPollTimer)
+  if (reportPollingInterviewId.value !== interviewId) reportStatus.value = null
+  reportPollingInterviewId.value = interviewId
+  reportPollingError.value = ''
+  reportPollFailureCount = 0
+  pollCompletedReport()
+  reportPollTimer = setInterval(pollCompletedReport, 2000)
+}
+
+async function retryCompletedReport() {
+  if (!lastCompletedInterviewId.value) return
+  try {
+    await retryInterviewReport(lastCompletedInterviewId.value)
+    startReportPolling(lastCompletedInterviewId.value)
+    showToast('已重新排队生成报告')
+  } catch (error) { showToast(error.message) }
+}
+
+async function openCompletedReport() {
+  const reportId = reportStatus.value?.reportId
+  if (!reportId) return
+  await loadReportHistory()
+  const row = reports.value.find((item) => item.id === reportId)
+  if (row) await openReport(row)
+}
 
 function showToast(message) {
   toast.value = message
@@ -306,26 +455,198 @@ function showToast(message) {
 }
 
 function navigate(destination) {
+  if (destination === 'practice') {
+    restoreExplicitReportReturn()
+  } else {
+    showReturnToCompletedResult.value = false
+    clearExplicitReportReturn()
+  }
   page.value = destination
   if (destination === 'practice') interviewStage.value = 'setup'
 }
 
-function openReport(report) {
-  selectedReportId.value = report.id
-  page.value = 'reportDetail'
+watch(page, (destination) => {
+  clearInterval(reportHistoryPollTimer)
+  reportHistoryPollTimer = undefined
+  if (destination !== 'reports') return
+  loadReportHistory().then(startReportHistoryPolling).catch((error) => showToast(error.message))
+})
+
+function startReportHistoryPolling() {
+  clearInterval(reportHistoryPollTimer)
+  if (page.value !== 'reports') return
+  reportHistoryPollTimer = setInterval(() => {
+    if (!reports.value.some((report) => ['PENDING', 'PROCESSING'].includes(report.reportTaskStatus))) {
+      clearInterval(reportHistoryPollTimer)
+      reportHistoryPollTimer = undefined
+      return
+    }
+    loadReportHistory().catch((error) => showToast(error.message))
+  }, 3000)
 }
 
-function openGapAnalysis() {
-  if (!currentReport.value?.hasJD) return
-  page.value = 'gapDetail'
+function explicitReportReturnKey() {
+  const username = currentUserInfo.value?.username
+  return username ? `interviewmirror.return-completed-report.${username}` : null
+}
+
+function restoreExplicitReportReturn() {
+  const key = explicitReportReturnKey()
+  if (!key) return
+  try {
+    const interviewId = sessionStorage.getItem(key)
+    if (interviewId) {
+      lastCompletedInterviewId.value = interviewId
+      showReturnToCompletedResult.value = true
+    }
+  } catch { /* session storage may be disabled; in-memory state still works */ }
+}
+
+function clearExplicitReportReturn() {
+  const key = explicitReportReturnKey()
+  if (key) {
+    try { sessionStorage.removeItem(key) } catch { /* in-memory state is still cleared */ }
+  }
+}
+
+async function returnToLastCompletedInterview(interviewId = lastCompletedInterviewId.value) {
+  if (!interviewId) return
+  try {
+    await refreshInterview(interviewId, { restore: true })
+    lastCompletedInterviewId.value = interviewId
+    reportStatus.value = await getInterviewReportStatus(interviewId)
+    showReturnToCompletedResult.value = false
+    clearExplicitReportReturn()
+    reportPollingError.value = ''
+    page.value = 'practice'
+    if (['PENDING', 'PROCESSING'].includes(reportStatus.value.reportTask?.status)) {
+      startReportPolling(interviewId)
+    }
+  } catch (error) { showToast(error.message || '无法恢复最近一次面试结果') }
+}
+
+function returnToInterviewSetup() {
+  const interviewId = lastCompletedInterviewId.value
+    || (activeInterview.value?.status === 'COMPLETE' ? activeInterview.value.id : null)
+    || reportPollingInterviewId.value
+  lastCompletedInterviewId.value = interviewId
+  showReturnToCompletedResult.value = Boolean(interviewId)
+  const key = explicitReportReturnKey()
+  if (key && interviewId) {
+    try { sessionStorage.setItem(key, interviewId) } catch { /* in-memory state still reveals the return button */ }
+  }
+  pendingInterviewId.value = null
+  page.value = 'practice'
+  interviewStage.value = 'setup'
+}
+
+async function retryHistoryReport(report) {
+  if (!report.interviewId || report.reportTaskStatus !== 'FAILED') return
+  try {
+    await retryInterviewReport(report.interviewId)
+    await loadReportHistory()
+    startReportHistoryPolling()
+    showToast('已重新排队生成报告')
+  } catch (error) { showToast(error.message || '报告重试失败') }
+}
+
+async function retryIncompleteAssessment(report = currentReport.value) {
+  const needsSummaryVerification = ['UNVERIFIED', 'EXTRACTIVE_FALLBACK'].includes(report?.overallReviewEvidenceStatus)
+  if (!report?.interviewId || (!needsSummaryVerification && !report.hasUnassessedDimensions)) return
+  try {
+    await retryInterviewReport(report.interviewId)
+    reports.value = reports.value.map((item) => item.interviewId === report.interviewId
+      ? { ...item, reportTaskStatus: 'PENDING', overallReviewEvidenceStatus: needsSummaryVerification ? 'UNVERIFIED' : item.overallReviewEvidenceStatus }
+      : item)
+    if (report.id && reportDetails.value[report.id]) {
+      reportDetails.value = { ...reportDetails.value, [report.id]: { ...reportDetails.value[report.id], reportTaskStatus: 'PENDING' } }
+    }
+    page.value = 'reports'
+    await loadReportHistory()
+    startReportHistoryPolling()
+    showToast('报告已重新进入评估队列，可在历史报告中查看进度')
+  } catch (error) { showToast(error.message || '报告重新评估失败') }
+}
+
+async function deleteReportHistory(report) {
+  const interviewId = report?.interviewId
+  if (!interviewId || deletingReportInterviews.value.has(interviewId)) return
+  if (!window.confirm(`删除“${report.title}”？这会同时删除本场问答记录、报告及其 PDF，且无法恢复。`)) return
+
+  deletingReportInterviews.value = new Set(deletingReportInterviews.value).add(interviewId)
+  try {
+    await deleteInterviewReport(interviewId)
+    reportHistoryRevision += 1
+    const reportId = report.id || reports.value.find((item) => item.interviewId === interviewId)?.id
+    reports.value = reports.value.filter((item) => item.interviewId !== interviewId)
+    if (reportId) {
+      const nextDetails = { ...reportDetails.value }
+      delete nextDetails[reportId]
+      reportDetails.value = nextDetails
+      if (selectedReportId.value === reportId) selectedReportId.value = reports.value.find((item) => item.id)?.id || null
+    }
+    if (lastCompletedInterviewId.value === interviewId) {
+      lastCompletedInterviewId.value = null
+      showReturnToCompletedResult.value = false
+      clearExplicitReportReturn()
+    }
+    if (activeInterview.value?.id === interviewId) {
+      activeInterview.value = null
+      turns.value = []
+      messages.value = []
+      reportStatus.value = null
+      answerText.value = ''
+      interviewStage.value = 'setup'
+    }
+    if (reportPollingInterviewId.value === interviewId) {
+      clearInterval(reportPollTimer)
+      reportPollTimer = undefined
+      reportPollingInterviewId.value = null
+    }
+    if (page.value === 'reportDetail') page.value = 'reports'
+    const pendingHistoryRequest = reportHistoryRequest
+    if (pendingHistoryRequest) await pendingHistoryRequest.catch(() => {})
+    await loadReportHistory()
+    showToast('报告和关联面试记录已删除')
+  } catch (error) {
+    showToast(error.message || '报告删除失败，请稍后重试')
+  } finally {
+    const remaining = new Set(deletingReportInterviews.value)
+    remaining.delete(interviewId)
+    deletingReportInterviews.value = remaining
+  }
+}
+
+async function openReport(report) {
+  if (['PENDING', 'PROCESSING'].includes(report.reportTaskStatus)) {
+    showToast('报告正在生成，请在历史报告中查看进度')
+    return
+  }
+  selectedReportId.value = report.id
+  page.value = 'reportDetail'
+  reportBusy.value = true
+  try {
+    const detail = await apiGetReport(report.id)
+    const mapped = mapReportSummary(detail)
+    reportDetails.value = { ...reportDetails.value, [report.id]: mapped }
+    reports.value = reports.value.map((item) => item.id === report.id ? { ...item, ...mapped } : item)
+  } catch (error) { showToast(error.message || '报告加载失败') }
+  finally { reportBusy.value = false }
 }
 
 function restartReport(report) {
-  mode.value = report.mode === '综合面试' ? 'COMPREHENSIVE' : 'QUESTION_BANK'
-  selectedResumeId.value = report.resumeId ?? resumes.value.find((item) => item.default)?.id ?? resumes.value[0]?.id ?? ''
-  selectedBankId.value = report.bankId ?? banks.value[0]?.id ?? ''
-  jdText.value = report.mode === '综合面试' ? report.jdText ?? '' : ''
+  mode.value = report.modeCode === 'COMPREHENSIVE' || report.mode === '综合面试' ? 'COMPREHENSIVE' : 'QUESTION_BANK'
+  const resume = resumes.value.find((item) => item.id === report.resumeId && item.ready)
+    ?? resumes.value.find((item) => item.ready && item.default)
+    ?? resumes.value.find((item) => item.ready)
+  const bank = banks.value.find((item) => item.id === report.bankId && item.ready)
+    ?? banks.value.find((item) => item.ready)
+  selectedResumeId.value = resume?.id ?? ''
+  selectedBankId.value = bank?.id ?? ''
+  jdText.value = mode.value === 'COMPREHENSIVE' ? report.jdText ?? '' : ''
   navigate('practice')
+  if (mode.value === 'COMPREHENSIVE' && !resume) showToast('原简历当前不可用，请先选择或确认一份简历。')
+  if (mode.value === 'QUESTION_BANK' && !bank) showToast('原题库当前不可用，请先选择或确认一份题库。')
 }
 
 function selectMode(nextMode) {
@@ -363,6 +684,8 @@ async function beginInterview() {
       pendingInterviewId.value = created.id
     }
     const started = await startInterview(pendingInterviewId.value)
+    showReturnToCompletedResult.value = false
+    clearExplicitReportReturn()
     activeInterview.value = started
     await refreshInterview(started.id)
     pendingInterviewId.value = null
@@ -413,12 +736,25 @@ async function finishInterview() {
     } finally { isThinking.value = false }
   }
   closeInterviewEvents()
+  lastCompletedInterviewId.value = activeInterview.value.id
+  showReturnToCompletedResult.value = false
+  reportPollingError.value = ''
   interviewStage.value = 'complete'
+  loadReportHistory().catch((error) => showToast(error.message || '面试已保存，但历史报告列表暂时未刷新。'))
+  startReportPolling(activeInterview.value.id)
 }
 
-function exportPdf() {
-  showToast('打开打印窗口后，可选择“另存为 PDF”')
-  window.setTimeout(() => window.print(), 250)
+async function exportPdf() {
+  if (!currentReport.value?.id) return showToast('报告尚未生成，暂时不能导出 PDF。')
+  try {
+    const blob = await downloadReportPdf(currentReport.value.id)
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `interviewmirror-report-${currentReport.value.id}.pdf`
+    anchor.click()
+    URL.revokeObjectURL(url)
+  } catch (error) { showToast(error.message) }
 }
 
 function openResumePicker() {
@@ -649,15 +985,7 @@ function formatSize(bytes) {
 }
 
 function resetDemo() {
-  if (!window.confirm('重置只会恢复当前页面里的只读示例报告，不会删除账号资料。继续吗？')) return
-  resumes.value = [...resumes.value]
-  banks.value = [...banks.value]
-  reports.value = [...seedReports]
-  selectedResumeId.value = resumes.value[0]?.id ?? ''
-  selectedBankId.value = banks.value[0]?.id ?? ''
-  selectedReportId.value = reports.value[0]?.id ?? null
-  page.value = 'home'
-  showToast('示例报告已重置，账号资料保持不变')
+  loadReportHistory().then(() => showToast('已刷新本地面试报告')).catch((error) => showToast(error.message))
 }
 </script>
 
@@ -748,7 +1076,7 @@ function resetDemo() {
               <button class="practice-card comprehensive-card" @click="selectMode('COMPREHENSIVE'); navigate('practice')">
                 <span class="card-icon icon-yellow"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M8 7h8m-8 4h5"/></svg></span>
                 <span class="card-label">推荐练习</span><strong>综合面试</strong><span class="card-description">结合简历和目标岗位，进行贴近真实面试的多轮追问。</span>
-                <span class="card-meta"><span>简历必选</span><span>JD 可选</span><span>岗位差异分析</span></span>
+                <span class="card-meta"><span>简历必选</span><span>JD 可选</span></span>
                 <span class="card-arrow">开始练习 <b>→</b></span>
                 <span class="card-decoration decoration-sun"></span>
               </button>
@@ -768,7 +1096,7 @@ function resetDemo() {
               <div class="stat-row">
                 <div class="stat-item"><strong>{{ reports.length }}</strong><span>已完成面试</span><small>持续积累中</small></div>
                 <div class="stat-item"><strong>{{ averageScore }}<small class="stat-unit">分</small></strong><span>平均表现</span><small>基于历史报告</small></div>
-                <div class="stat-item"><strong>{{ comprehensiveCount }}</strong><span>综合面试</span><small>含岗位复盘</small></div>
+                <div class="stat-item"><strong>{{ comprehensiveCount }}</strong><span>综合面试</span><small>含岗位要求</small></div>
               </div>
               <div class="progress-footer"><span class="progress-spark">✦</span><span>每次练习都会留下一条进步线索</span><button @click="navigate('reports')">查看报告 <b>→</b></button></div>
             </div>
@@ -782,12 +1110,12 @@ function resetDemo() {
           <section class="section-block recent-block">
             <div class="section-heading compact-heading"><div><span class="section-kicker">RECENT REPORTS</span><h2>最近的练习</h2></div><button class="text-button" @click="navigate('reports')">查看全部 <span>→</span></button></div>
             <div v-if="reports.length" class="recent-list">
-              <button v-for="report in reports.slice(0, 2)" :key="report.id" class="recent-report" @click="openReport(report)">
+              <button v-for="report in reports.slice(0, 2)" :key="report.interviewId" class="recent-report" @click="report.id ? openReport(report) : navigate('reports')">
                 <span class="recent-file"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M9 12h6m-6 4h6"/></svg></span>
-                <span class="recent-main"><strong>{{ report.title }}</strong><small>{{ report.mode }} <i>·</i> {{ report.date }}</small></span>
-                <span v-if="report.hasJD" class="match-mini"><small>岗位匹配</small><strong>{{ report.matchScore }}<small>分</small></strong></span>
-                <span class="score-mini"><small>综合表现</small><strong>{{ report.overallScore }}<small>分</small></strong></span>
-                <span class="row-arrow">→</span>
+                <span class="recent-main"><strong>{{ report.title }}</strong><small>{{ report.mode }} <i>·</i> {{ report.date }} <i>·</i> {{ reportTaskLabel(report.reportTaskStatus, Boolean(report.id)) }}</small></span>
+
+                <span class="score-mini"><small>综合表现</small><strong v-if="report.overallScore != null">{{ report.overallScore }}<small>分</small></strong><strong v-else>—</strong></span>
+                <span v-if="report.id" class="row-arrow">→</span><span v-else class="report-wait-mark">···</span>
               </button>
             </div>
             <div v-else class="empty-state"><span>✦</span><strong>还没有面试记录</strong><p>完成第一场练习后，报告会出现在这里。</p></div>
@@ -797,6 +1125,7 @@ function resetDemo() {
 
         <template v-else-if="page === 'practice' && interviewStage === 'setup'">
           <div class="page-intro"><div><span class="section-kicker">PRACTICE ROOM</span><h1>{{ pageHeading[0] }}</h1><p>{{ pageHeading[1] }}</p></div><span class="intro-illustration">✦</span></div>
+          <div v-if="showReturnToCompletedResult && lastCompletedInterviewId" class="return-completed-banner"><span>◷</span><div><strong>本场面试结果已保存</strong><small>可以返回查看本场问答记录和报告生成状态。</small></div><button class="return-result-button" @click="returnToLastCompletedInterview(lastCompletedInterviewId)">返回面试结果 →</button></div>
           <div class="mode-switch" role="tablist" aria-label="面试模式">
             <button :class="{ selected: mode === 'COMPREHENSIVE' }" @click="selectMode('COMPREHENSIVE')"><span class="switch-icon">◉</span><span><strong>综合面试</strong><small>结合简历和岗位目标</small></span></button>
             <button :class="{ selected: mode === 'QUESTION_BANK' }" @click="selectMode('QUESTION_BANK')"><span class="switch-icon switch-peach">▤</span><span><strong>专项面试</strong><small>使用自定义题库练习</small></span></button>
@@ -818,7 +1147,7 @@ function resetDemo() {
                   <p v-if="!resumes.some((item) => item.ready)" class="inline-hint error-hint">请先在“我的简历”上传并确认一份简历。</p>
                 </div>
                 <label class="field-label jd-label" for="jd-input">目标岗位 JD <span class="optional-tag">选填</span></label>
-                <textarea id="jd-input" v-model="jdText" class="text-field jd-field" maxlength="1500" placeholder="粘贴岗位职责与任职要求…\n\n填写 JD 后，面试问题会参考目标岗位要求；当前版本暂不生成岗位差异报告。"></textarea>
+                <textarea id="jd-input" v-model="jdText" class="text-field jd-field" maxlength="1500" placeholder="粘贴岗位职责与任职要求…\n\n填写 JD 后，面试问题会参考目标岗位要求。"></textarea>
                 <div class="field-footnote"><span>最多 1500 字</span><span>{{ jdText.length }} / 1500</span></div>
               </template>
               <template v-else>
@@ -833,7 +1162,7 @@ function resetDemo() {
                   <button class="add-inline" @click="navigate('banks')">＋ 管理我的题库</button>
                   <p v-if="!banks.some((item) => item.ready)" class="inline-hint error-hint">请先上传并确认一份题库。</p>
                 </div>
-                <div class="bank-mode-note"><span class="note-icon">✦</span><div><strong>专注练习，不依赖简历</strong><p>AI 会围绕题库原题继续追问。结束后可查看本场问题与回答记录；评分报告尚未接入。本模式不会生成岗位差异分析。</p></div></div>
+                <div class="bank-mode-note"><span class="note-icon">✦</span><div><strong>专注练习，不依赖简历</strong><p>AI 会围绕题库原题继续追问。结束后可查看本场问题与回答记录；评分报告尚未接入。</p></div></div>
               </template>
 
               <label class="model-consent"><input v-model="modelDataConsent" type="checkbox" /><span>我同意将本场所选简历或题库内容、回答发送至配置的模型服务，以生成问题和追问。面试回答会保存在本地应用中。</span></label>
@@ -876,61 +1205,42 @@ function resetDemo() {
 
         <template v-else-if="page === 'practice' && interviewStage === 'complete'">
           <div class="page-intro"><div><span class="section-kicker">INTERVIEW COMPLETE</span><h1>本场面试已结束</h1><p>{{ reportTitleDraft }} · {{ mode === 'COMPREHENSIVE' ? '综合面试' : '题库专项' }}</p></div><span class="intro-illustration">✓</span></div>
-          <section class="panel completion-panel"><h2>回答记录已保存</h2><p>本阶段暂不生成 AI 评分报告。你可以在本场记录中查看已保存的问题与回答，报告生成能力将在后续阶段接入。</p><div class="completion-turns"><article v-for="(turn, index) in turns" :key="turn.id" class="completion-turn"><strong>{{ index + 1 }}. {{ turn.type === 'FOLLOW_UP' ? '追问' : '问题' }}</strong><p>{{ turn.question }}</p><blockquote v-if="turn.answer">{{ turn.answer }}</blockquote><small v-else>本题未作答</small></article></div><div class="form-actions"><button class="subtle-button" @click="navigate('practice'); interviewStage = 'setup'; activeInterview = null; pendingInterviewId = null">返回面试设置</button><button class="primary-button" @click="navigate('home')">返回工作台</button></div></section>
+          <section class="panel completion-panel"><h2>本场面试已保存</h2><p>历史报告会为本场单独保留；生成完成后才能打开查看。</p><div class="report-generation-status" role="status"><strong>{{ reportStatusLabel }}</strong><span v-if="reportPollingError" class="report-status-error">{{ reportPollingError }}</span><span v-else-if="reportStatus?.reportTask?.status === 'FAILED'" class="report-status-error">{{ reportStatus.reportTask.errorMessage || '报告生成失败，可以重试。' }}</span><span v-else-if="reportStatus?.reportTask?.status === 'SUCCESS'">报告已保存到历史报告。</span><span v-else-if="reportStatus?.reportTask?.status === 'PROCESSING'">模型正在分析本场回答；耗时可能因模型服务响应而变化。</span><span v-else>报告任务等待后台 Worker 处理；你可以留在此页等待，或之后到历史报告查看进度。</span><i v-if="['PENDING', 'PROCESSING'].includes(reportStatus?.reportTask?.status)" class="report-progress-track completion-progress" role="progressbar" aria-label="报告生成进度"><b :class="reportStatus.reportTask.status.toLowerCase()"></b></i><div class="form-actions"><button v-if="reportPollingError" class="subtle-button" @click="startReportPolling(lastCompletedInterviewId)">重新检查</button><button v-if="reportStatus?.reportTask?.status === 'FAILED'" class="subtle-button" @click="retryCompletedReport">重试生成</button><button v-if="reportStatus?.reportId && reportStatus?.reportTask?.status === 'SUCCESS'" class="primary-button" @click="openCompletedReport">查看报告 →</button></div></div><div class="completion-turns"><article v-for="(turn, index) in turns" :key="turn.id" class="completion-turn"><strong>{{ index + 1 }}. {{ turn.type === 'FOLLOW_UP' ? '追问' : '问题' }}</strong><p>{{ turn.question }}</p><blockquote v-if="turn.answer">{{ turn.answer }}</blockquote><small v-else>本题未作答</small></article></div><div class="form-actions"><button class="subtle-button" @click="returnToInterviewSetup">返回面试设置</button><button class="primary-button" @click="navigate('home')">返回工作台</button></div></section>
         </template>
 
         <template v-else-if="page === 'reports'">
-          <div class="page-intro"><div><span class="section-kicker">YOUR JOURNEY</span><h1>历史报告</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" @click="navigate('practice')">＋ 新建面试</button></div>
-          <div class="report-summary-strip"><div><span class="summary-icon">◷</span><span><small>累计练习</small><strong>{{ reports.length }} <small>场</small></strong></span></div><div><span class="summary-icon peach-summary">✦</span><span><small>平均表现</small><strong>{{ averageScore }} <small>分</small></strong></span></div><div><span class="summary-icon green-summary">↗</span><span><small>含岗位差异分析</small><strong>{{ reports.filter((r) => r.hasJD).length }} <small>份</small></strong></span></div></div>
-          <div class="library-tip"><span>◇</span><p><strong>只读示例报告</strong> 当前报告用于展示报告和差异分析交互，不代表真实登录账号的练习历史；真实报告持久化会在后续业务阶段接入。</p></div>
-          <section class="panel report-list-panel"><div class="list-panel-heading"><div><span class="section-kicker">ALL SESSIONS</span><h2>示例面试记录 <span>{{ reports.length }}</span></h2></div><div class="sort-select">最近练习 <span>⌄</span></div></div>
+          <div class="page-intro"><div><span class="section-kicker">YOUR JOURNEY</span><h1>历史报告</h1><p>所有内容来自已完成面试及其保存的资料快照。</p></div><button class="primary-button" @click="navigate('practice')">＋ 新建面试</button></div>
+          <div class="report-summary-strip"><div><span class="summary-icon">◷</span><span><small>已生成报告</small><strong>{{ generatedReportCount }} <small>份</small></strong></span></div><div><span class="summary-icon peach-summary">✦</span><span><small>平均表现</small><strong>{{ averageScore }} <small>分</small></strong></span></div></div>
+          <section class="panel report-list-panel"><div class="list-panel-heading"><div><span class="section-kicker">ALL SESSIONS</span><h2>历史面试 <span>{{ reports.length }}</span></h2></div><button class="subtle-button" @click="loadReportHistory">刷新</button></div>
             <div v-if="reports.length" class="report-table">
-              <div class="table-head"><span>面试与岗位</span><span>类型</span><span>时间</span><span>岗位匹配</span><span>综合评分</span><span></span></div>
-              <button v-for="report in reports" :key="report.id" class="report-row" @click="openReport(report)">
-                <span class="report-name-cell"><span class="recent-file"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M9 12h6m-6 4h6"/></svg></span><span><strong>{{ report.title }}</strong><small>{{ report.questionCount }} 道问题 · {{ report.duration }}</small></span></span>
-                <span><i class="type-pill" :class="report.hasJD ? 'type-comprehensive' : 'type-special'">{{ report.mode }}</i></span>
+              <div class="table-head"><span>面试与岗位</span><span>类型</span><span>时间</span><span>报告进度</span><span>综合评分</span><span>操作</span></div>
+              <div v-for="report in reports" :key="report.interviewId" class="report-row">
+                <button class="report-open-button report-name-cell" :disabled="!report.id || ['PENDING', 'PROCESSING'].includes(report.reportTaskStatus)" @click="openReport(report)"><span class="recent-file"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M9 12h6m-6 4h6"/></svg></span><span><strong>{{ report.title }}</strong><small>{{ report.questionCount }} 条回答 · {{ ['PENDING', 'PROCESSING'].includes(report.reportTaskStatus) ? '报告重新生成中' : report.reportStatus === 'PARTIAL' ? '部分覆盖' : report.id ? '报告已生成' : '报告生成中' }}</small></span></button>
+                <span><i class="type-pill" :class="report.modeCode === 'COMPREHENSIVE' ? 'type-comprehensive' : 'type-special'">{{ report.mode }}</i></span>
                 <span class="table-date">{{ report.date }}</span>
-                <span><strong v-if="report.hasJD" class="table-match">{{ report.matchScore }}<small>分</small></strong><small v-else class="na-label">不适用</small></span>
-                <span><strong class="table-score">{{ report.overallScore }}<small>分</small></strong></span><span class="row-arrow">→</span>
-              </button>
+                <span class="report-progress-cell"><strong>{{ reportTaskLabel(report.reportTaskStatus, Boolean(report.id)) }}</strong><small v-if="report.reportTaskStatus === 'FAILED'">{{ report.reportErrorMessage || '可重试生成' }}</small><i v-if="['PENDING', 'PROCESSING'].includes(report.reportTaskStatus)" class="report-progress-track"><b :class="report.reportTaskStatus.toLowerCase()"></b></i></span>
+                <span><strong v-if="report.overallScore != null" class="table-score">{{ report.overallScore }}<small>分</small></strong><small v-else class="na-label">{{ report.id ? '未评估' : '—' }}</small></span>
+                <div class="report-row-actions"><button v-if="report.reportTaskStatus === 'FAILED'" class="report-retry-button" @click="retryHistoryReport(report)">重试</button><button v-else-if="report.reportTaskStatus === 'SUCCESS' && (report.overallReviewEvidenceStatus === 'UNVERIFIED' || report.hasUnassessedDimensions)" class="report-retry-button" @click="retryIncompleteAssessment(report)">重新评估</button><span v-else-if="report.id" class="row-arrow" aria-hidden="true">→</span><span v-else class="report-wait-mark" aria-hidden="true">···</span><button class="report-delete-button" :disabled="deletingReportInterviews.has(report.interviewId)" @click="deleteReportHistory(report)">{{ deletingReportInterviews.has(report.interviewId) ? '删除中' : '删除' }}</button></div>
+              </div>
             </div>
-            <div v-else class="empty-state"><span>✦</span><strong>完成一场练习，开启你的复盘记录</strong><button class="primary-button" @click="navigate('practice')">开始模拟面试</button></div>
+            <div v-else class="empty-state"><span>✦</span><strong>完成一场练习后，报告会出现在这里</strong><button class="primary-button" @click="navigate('practice')">开始模拟面试</button></div>
           </section>
         </template>
 
         <template v-else-if="page === 'reportDetail' && currentReport">
-          <div class="report-detail-top"><button class="back-link" @click="navigate('reports')">← 返回历史报告</button><div class="report-actions"><button class="subtle-button" @click="restartReport(currentReport)">↻ 重新面试</button><button class="primary-button" @click="exportPdf"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v4h14v-4"/></svg> 导出 PDF</button></div></div>
-          <section class="report-cover"><div><span class="section-kicker">INTERVIEW REPORT</span><div class="report-title-line"><h1>{{ currentReport.title }}</h1><span class="type-pill" :class="currentReport.hasJD ? 'type-comprehensive' : 'type-special'">{{ currentReport.mode }}</span></div><div class="report-meta"><span>◷ {{ currentReport.date }}</span><i>·</i><span>{{ currentReport.duration }}</span><i>·</i><span>{{ currentReport.questionCount }} 道问题</span></div></div><div class="cover-score"><span>综合表现</span><strong>{{ currentReport.overallScore }}</strong><small>/ 100</small><div class="score-meter"><span :style="{ width: `${currentReport.overallScore}%` }"></span></div><small class="score-caption">稳步成长中</small></div></section>
+          <div class="report-detail-top"><button class="back-link" @click="navigate('reports')">← 返回历史报告</button><div class="report-actions"><button class="report-delete-button" :disabled="deletingReportInterviews.has(currentReport.interviewId)" @click="deleteReportHistory(currentReport)">删除报告</button><button class="subtle-button" @click="restartReport(currentReport)">↻ 重新面试</button><button class="primary-button" @click="exportPdf">导出 PDF</button></div></div>
+          <div v-if="reportBusy" class="panel"><p>正在加载已保存的报告和证据…</p></div>
+          <template v-else>
+            <section class="report-cover"><div><span class="section-kicker">INTERVIEW REPORT</span><div class="report-title-line"><h1>{{ currentReport.title }}</h1><span class="type-pill" :class="currentReport.modeCode === 'COMPREHENSIVE' ? 'type-comprehensive' : 'type-special'">{{ currentReport.mode }}</span></div><div class="report-meta"><span>◷ {{ currentReport.date }}</span><i>·</i><span>{{ currentReport.questionCount }} 条回答</span><i>·</i><span>{{ currentReport.reportStatus === 'PARTIAL' ? '部分覆盖' : '已完成' }}</span></div></div><div class="cover-score"><span>综合表现</span><strong v-if="currentReport.overallScore != null">{{ currentReport.overallScore }}</strong><strong v-else>—</strong><small v-if="currentReport.overallScore != null">/ 100</small><small v-else>未评估</small><div class="score-meter"><span :style="{ width: `${currentReport.overallScore ?? 0}%` }"></span></div><small class="score-caption">{{ currentReport.raw?.summary?.overallScoreStatus || 'UNASSESSED' }}</small></div></section>
+            <section class="report-section report-evaluation"><div class="report-section-heading"><span class="section-number">01</span><div><span class="section-kicker">OVERALL REVIEW</span><h2>总体评价</h2></div></div><div v-if="currentReport.overallReviewEvidenceStatus === 'UNVERIFIED' || currentReport.hasUnassessedDimensions" class="report-verification-notice"><span>!</span><div class="report-verification-copy"><p v-if="currentReport.overallReviewEvidenceStatus === 'UNVERIFIED'">总体评价未通过自动证据核验，系统已隐藏未核实的总结。你可以重新评估报告。</p><p v-if="currentReport.hasUnassessedDimensions">部分适用能力维度尚未评估。重新评估会重新检查本场回答；只有存在直接相关回答证据时才会评分，证据不足的维度仍会保留为未评估。</p></div><button class="report-retry-button" :disabled="['PENDING', 'PROCESSING'].includes(currentReport.reportTaskStatus)" @click="retryIncompleteAssessment()">{{ ['PENDING', 'PROCESSING'].includes(currentReport.reportTaskStatus) ? '正在重新评估' : '重新评估报告' }}</button></div><div class="overall-note"><span class="quote-mark">“</span><p>{{ currentReport.overall }}</p></div><details v-if="currentReport.overallEvidence.length" class="report-evidence"><summary>查看总体评价证据</summary><blockquote v-for="(evidence, index) in currentReport.overallEvidence" :key="index">{{ evidence.quote }}<small>{{ evidence.sourceType }} · {{ evidence.sourceLocation }}</small></blockquote></details><div class="score-grid"><div v-for="item in currentReport.scores" :key="item.key" class="score-card"><div class="score-card-top"><span>{{ item.label }}</span><strong v-if="item.score != null">{{ item.score }}<small>/5</small></strong><strong v-else class="score-na">未评估</strong></div><div class="score-bar"><span :style="{ width: item.score == null ? '0%' : `${item.score * 20}%` }"></span></div><p>{{ item.note }}</p></div></div>
+              <div class="report-radar-wrap"><div><h3>{{ currentReport.modeCode === 'QUESTION_BANK' ? '专项能力雷达图' : '六维能力雷达图' }}</h3><p>未评估维度保留为空，不按 0 分绘制。</p></div><svg viewBox="0 0 240 190" class="radar-chart" role="img" :aria-label="currentReport.modeCode === 'QUESTION_BANK' ? '专项面试能力雷达图' : '六维面试能力雷达图'"><polygon v-for="(grid, index) in reportRadar.gridPolygons" :key="`grid-${index}`" :points="grid" class="radar-grid"/><line v-for="point in reportRadar.points" :key="point.key" x1="120" y1="92" :x2="point.axisX" :y2="point.axisY" class="radar-axis"/><polygon v-if="reportRadar.polygon" :points="reportRadar.polygon" class="radar-area answer-area"/><circle v-for="point in reportRadar.points.filter((item) => item.score != null)" :key="`score-${point.key}`" :cx="point.x" :cy="point.y" r="3.5" class="radar-point"/><text v-for="point in reportRadar.points" :key="`label-${point.key}`" :x="point.labelX" :y="point.labelY" text-anchor="middle">{{ point.label }}</text></svg></div></section>
 
-          <section class="report-section report-evaluation"><div class="report-section-heading"><span class="section-number">01</span><div><span class="section-kicker">OVERALL REVIEW</span><h2>总体评价</h2></div></div><div class="overall-note"><span class="quote-mark">“</span><p>{{ currentReport.overall }}</p></div><div class="score-grid"><div v-for="(item, index) in currentReport.scores" :key="item.label" class="score-card"><div class="score-card-top"><span>{{ item.label }}</span><strong v-if="item.score !== null">{{ item.score.toFixed(1) }}<small>/5</small></strong><strong v-else class="score-na">—</strong></div><div class="score-bar"><span :style="{ width: item.score === null ? '0%' : `${item.score * 20}%` }" :class="`bar-tone-${index}`"></span></div><p>{{ item.note }}</p></div></div></section>
+            <section class="report-section"><div class="report-section-heading"><span class="section-number">02</span><div><span class="section-kicker">QUESTION BY QUESTION</span><h2>问答逐题回顾</h2></div><span class="heading-side-note">{{ currentReport.turns.length }} 条回答</span></div><div class="turn-list"><article v-for="(turn, index) in currentReport.turns" :key="turn.id" class="turn-card"><div class="turn-heading"><span class="turn-number">Q{{ String(index + 1).padStart(2, '0') }}</span><span class="turn-topic">{{ turn.kind === 'FOLLOW_UP' ? '追问' : '主问题' }}</span></div><h3>{{ turn.question }}</h3><div class="answer-quote"><span>你的回答</span><p>“{{ turn.answer }}</p></div><div class="turn-feedback"><span>✦</span><p>{{ turn.note }}</p></div><div v-if="turn.strengths.length" class="evidence-list"><strong>回答亮点</strong><span v-for="item in turn.strengths" :key="item">{{ item }}</span></div><div v-if="turn.improvements.length" class="evidence-list"><strong>可改进</strong><span v-for="item in turn.improvements" :key="item">{{ item }}</span></div><details v-if="turn.evidence.length" class="report-evidence"><summary>查看证据引用</summary><blockquote v-for="(evidence, itemIndex) in turn.evidence" :key="itemIndex">{{ evidence.quote }}<small>{{ evidence.sourceType }} · {{ evidence.sourceLocation }}</small></blockquote></details></article><div v-if="!currentReport.turns.length" class="empty-state"><strong>本场没有已提交回答，能力维度均未评估。</strong></div></div></section>
 
-          <section class="report-section"><div class="report-section-heading"><span class="section-number">02</span><div><span class="section-kicker">QUESTION BY QUESTION</span><h2>问答逐题回顾</h2></div><span class="heading-side-note">{{ currentReport.turns.length }} 条回答记录</span></div><div class="turn-list"><article v-for="(turn, index) in currentReport.turns" :key="index" class="turn-card"><div class="turn-heading"><span class="turn-number">Q{{ String(index + 1).padStart(2, '0') }}</span><span class="turn-topic">{{ index === 0 ? '项目经历' : index === 1 ? '技术理解' : '问题解决' }}</span><span v-if="turn.score" class="turn-score">表现 {{ turn.score }}/5</span></div><h3>{{ turn.question }}</h3><div class="answer-quote"><span>你的回答</span><p>“{{ turn.answer }}”</p></div><div class="turn-feedback"><span>✦</span><p>{{ turn.note }}</p></div></article></div></section>
-
-          <section v-if="currentReport.hasJD" class="report-section diff-summary-section"><div class="report-section-heading"><span class="section-number">03</span><div><span class="section-kicker">ROLE GAP SUMMARY</span><h2>岗位差异化分析</h2></div><span class="evidence-badge"><span></span>基于简历、JD 与本场回答</span></div>
-            <div class="diff-summary-card"><div class="match-score-panel"><span class="match-caption">岗位匹配度</span><div class="match-score"><strong>{{ currentReport.matchScore }}</strong><span>/ 100</span></div><div class="match-progress"><span :style="{ width: `${currentReport.matchScore}%` }"></span></div><small>{{ currentReport.coverage }} · 已排除未评估项</small></div>
-              <div class="summary-gaps"><div class="summary-subhead"><strong>优先关注的差距</strong><small>TOP {{ Math.min(3, currentReport.gaps.length) }}</small></div><div v-for="(gap, index) in currentReport.gaps.slice(0, 3)" :key="gap.title" class="summary-gap"><span class="gap-rank">0{{ index + 1 }}</span><span>{{ gap.title }}</span><i :class="gap.priority === '高' ? 'priority-high' : 'priority-mid'">{{ gap.priority }}</i></div><p v-if="!currentReport.gaps.length" class="no-gap-note">当前没有足够证据生成差距项。</p></div>
-              <div class="summary-radar"><div class="summary-subhead"><strong>岗位能力雷达</strong><small>JD / 简历 / 表现</small></div><svg class="radar-chart" viewBox="0 0 240 190" role="img" aria-label="岗位要求、简历证据和面试表现雷达图"><polygon points="120,22 190,67 164,147 76,147 50,67" class="radar-grid"/><polygon points="120,43 173,77 153,133 86,136 68,80" class="radar-grid"/><polygon points="120,64 155,86 142,119 97,124 85,90" class="radar-grid"/><path d="M120 22v125M50 67l140 0M76 147l88-80M164 147 76 67M120 22 76 147" class="radar-axis"/><polygon points="120,39 168,82 150,133 95,128 72,83" class="radar-area jd-area"/><polygon points="120,56 153,88 138,116 102,120 88,93" class="radar-area resume-area"/><polygon points="120,50 160,85 145,123 96,121 84,86" class="radar-area answer-area"/><text x="120" y="12" text-anchor="middle">技能</text><text x="202" y="67">项目经验</text><text x="170" y="164">问题解决</text><text x="31" y="164">岗位职责</text><text x="19" y="67">交付能力</text></svg><div class="radar-legend"><span><i class="legend-jd"></i>岗位要求</span><span><i class="legend-resume"></i>简历证据</span><span><i class="legend-answer"></i>面试表现</span></div></div>
-              <div class="summary-conclusion"><span class="conclusion-icon">✦</span><div><small>一句话结论</small><p>{{ currentReport.oneLine }}</p></div><button class="text-button" @click="openGapAnalysis">查看完整分析 <span>→</span></button></div>
-            </div>
-          </section>
-          <section v-else class="report-section"><div class="report-section-heading"><span class="section-number">03</span><div><span class="section-kicker">ROLE GAP SUMMARY</span><h2>岗位差异化分析</h2></div></div><div class="not-applicable-card"><span>◇</span><div><strong>本场不生成岗位差异分析</strong><p>{{ currentReport.mode === '题库专项' ? '题库专项面试不关联简历和 JD。' : '综合面试未提供 JD。' }}如需岗位匹配度和差距雷达图，请在新建综合面试时粘贴目标岗位 JD。</p></div><button class="subtle-button" @click="mode = 'COMPREHENSIVE'; navigate('practice')">新建综合面试</button></div></section>
-
-          <section class="report-section strengths-grid-section"><div class="report-section-heading"><span class="section-number">04</span><div><span class="section-kicker">YOUR SIGNALS</span><h2>亮点与待提升</h2></div></div><div class="strengths-grid"><div class="strength-panel"><div class="strength-title"><span class="strength-icon">✦</span><h3>亮点与优势</h3></div><ul><li v-for="item in currentReport.strengths" :key="item">{{ item }}</li></ul></div><div class="weakness-panel"><div class="strength-title"><span class="weak-icon">↗</span><h3>薄弱点与不足</h3></div><ul><li v-for="item in currentReport.weaknesses" :key="item">{{ item }}</li></ul></div></div></section>
-          <section class="report-section"><div class="report-section-heading"><span class="section-number">05</span><div><span class="section-kicker">NEXT PRACTICE</span><h2>改进建议与学习路径</h2></div></div><div class="suggestion-list"><div v-for="(item, index) in currentReport.suggestions" :key="item" class="suggestion-item"><span>0{{ index + 1 }}</span><p>{{ item }}</p><i>本周可行动</i></div></div><div class="learning-path"><div class="learning-heading"><span>✦</span><div><strong>你的下一段学习路径</strong><small>先补证据，再练表达，最后回到岗位场景</small></div></div><div class="learning-steps"><div v-for="(item, index) in currentReport.learning" :key="item"><span>{{ String(index + 1).padStart(2, '0') }}</span><p>{{ item }}</p></div></div></div></section>
-          <section class="next-step-card"><div><span class="section-kicker">KEEP THE MOMENTUM</span><h2>下一次，会更清楚。</h2><p>再练一次，把这次复盘变成下一次更好的回答。</p></div><div class="next-step-actions"><button class="subtle-button" @click="navigate('home')">返回主页</button><button class="primary-button" @click="restartReport(currentReport)">重新面试 <span>→</span></button></div></section>
-          <footer class="page-footer"><span>面镜 InterviewMirror</span><span>AI 生成内容用于自我练习与复盘</span></footer>
-        </template>
-
-        <template v-else-if="page === 'gapDetail' && currentReport">
-          <div class="report-detail-top"><button class="back-link" @click="page = 'reportDetail'">← 返回面试报告</button><button class="subtle-button" @click="exportPdf">导出完整报告 PDF</button></div>
-          <div class="gap-page-heading"><span class="section-kicker">FULL ROLE GAP ANALYSIS</span><h1>岗位差异分析</h1><p>{{ currentReport.title }} <i>·</i> {{ currentReport.date }}</p><div class="gap-score-pill"><span>岗位匹配度</span><strong>{{ currentReport.matchScore }}<small>/100</small></strong><span class="gap-score-track"><i :style="{ width: `${currentReport.matchScore}%` }"></i></span><small>{{ currentReport.coverage }}；未评估项不计为不匹配</small></div></div>
-          <section class="analysis-section"><div class="report-section-heading"><span class="section-number">01</span><div><span class="section-kicker">RESUME VS. JD</span><h2>简历与岗位要求</h2></div></div><div class="comparison-grid"><article class="comparison-card"><div class="comparison-title"><span class="comparison-icon jd-icon">JD</span><div><strong>岗位核心要求</strong><small>从目标岗位描述中提取</small></div></div><div class="requirement-row"><span>01</span><p><strong>有 RAG 或知识库问答项目经验</strong><small>“负责企业级知识库与智能问答应用建设”</small></p><i class="requirement-high">核心</i></div><div class="requirement-row"><span>02</span><p><strong>具备评估与效果迭代意识</strong><small>“持续评估并优化大模型应用效果”</small></p><i class="requirement-high">核心</i></div><div class="requirement-row"><span>03</span><p><strong>了解服务部署与稳定性保障</strong><small>“熟悉服务部署、监控及异常处理”</small></p><i class="requirement-mid">重要</i></div></article>
-              <article class="comparison-card"><div class="comparison-title"><span class="comparison-icon resume-icon">简</span><div><strong>简历中的相关证据</strong><small>来自已确认简历</small></div></div><div class="resume-evidence-row"><span class="evidence-check">✓</span><p><strong>实现文档切分、向量召回与重排</strong><small>简历 · 项目经历 1 · 第 2 段</small></p><i class="evidence-match">匹配</i></div><div class="resume-evidence-row"><span class="evidence-check partial">~</span><p><strong>提及检索优化，未给出评估指标</strong><small>简历 · 项目经历 1 · 第 4 段</small></p><i class="evidence-partial">部分</i></div><div class="resume-evidence-row"><span class="evidence-none">—</span><p><strong>暂未找到部署监控的直接证据</strong><small>该要求未在简历中体现</small></p><i class="evidence-unknown">待补证据</i></div></article></div></section>
-
-          <section class="analysis-section"><div class="report-section-heading"><span class="section-number">02</span><div><span class="section-kicker">INTERVIEW VS. ROLE</span><h2>实际表现与岗位要求</h2></div></div><div class="performance-table-wrap"><table class="performance-table"><thead><tr><th>岗位要求</th><th>简历证据</th><th>面试表现</th><th>当前判断</th></tr></thead><tbody><tr><td><strong>RAG 项目经验</strong><small>核心要求</small></td><td><span class="table-status good">● 已体现</span></td><td><span class="table-status good">● 能解释链路</span><small>回答 Q1、Q2</small></td><td><span class="table-status good">匹配</span></td></tr><tr><td><strong>评估与效果迭代</strong><small>核心要求</small></td><td><span class="table-status partial">● 有相关描述</span></td><td><span class="table-status partial">● 指标和流程不完整</span><small>回答 Q3</small></td><td><span class="table-status partial">部分匹配</span></td></tr><tr><td><strong>部署与稳定性</strong><small>重要要求</small></td><td><span class="table-status unknown">— 未找到证据</span></td><td><span class="table-status partial">● 提及重试，边界不足</span><small>回答 Q6</small></td><td><span class="table-status partial">需要补强</span></td></tr></tbody></table></div></section>
-
-          <section class="analysis-section"><div class="report-section-heading"><span class="section-number">03</span><div><span class="section-kicker">GAP ATTRIBUTION</span><h2>差距归因与证据</h2></div></div><div class="gap-detail-list"><article v-for="(gap, index) in currentReport.gaps" :key="gap.title" class="gap-detail-card"><div class="gap-detail-top"><span class="gap-rank">0{{ index + 1 }}</span><span class="gap-type-chip">{{ gap.group }}</span><span class="priority-chip" :class="gap.priority === '高' ? 'priority-high-bg' : 'priority-mid-bg'">{{ gap.priority }}优先级</span></div><h3>{{ gap.title }}</h3><p class="gap-description">{{ gap.detail }}</p><div class="evidence-quote-block"><span>证据来源</span><p>“{{ gap.evidence }}：{{ gap.requirement }}”</p><small>本场回答与已确认资料仅用于练习反馈</small></div></article><div v-if="!currentReport.gaps.length" class="empty-state"><strong>当前没有足够证据生成差距项</strong><p>可以补充简历或回答后再次练习。</p></div></div></section>
-          <section class="gap-next-action"><div><span class="section-kicker">YOUR NEXT MOVE</span><h2>把最高优先级差距带进下一次练习</h2><p>针对一个具体要求补足证据，再用同一岗位方向检验表达效果。</p></div><button class="primary-button" @click="page = 'reportDetail'">回到报告 <span>→</span></button></section>
+            <section class="report-section strengths-grid-section"><div class="report-section-heading"><span class="section-number">03</span><div><span class="section-kicker">YOUR SIGNALS</span><h2>亮点与待提升</h2></div></div><div class="strengths-grid"><div class="strength-panel"><div class="strength-title"><span class="strength-icon">✦</span><h3>亮点与优势</h3></div><ul><li v-for="(item, index) in currentReport.strengths" :key="index">{{ item }}</li><li v-if="!currentReport.strengths.length">暂无可确认的优势结论。</li></ul></div><div class="weakness-panel"><div class="strength-title"><span class="weak-icon">↗</span><h3>待提升风险</h3></div><ul><li v-for="(item, index) in currentReport.weaknesses" :key="index">{{ item }}</li><li v-if="!currentReport.weaknesses.length">本场没有可确认的不足结论。</li></ul></div></div></section>
+            <section class="report-section"><div class="report-section-heading"><span class="section-number">04</span><div><span class="section-kicker">NEXT PRACTICE</span><h2>改进建议与学习路径</h2></div></div><div class="suggestion-list"><div v-for="(item, index) in currentReport.suggestions" :key="index" class="suggestion-item"><span>{{ String(index + 1).padStart(2, '0') }}</span><p>{{ item }}</p><i>行动建议</i></div></div><div class="learning-path"><div class="learning-heading"><span>✦</span><div><strong>你的下一段学习路径</strong><small>依据本场回答中的证据生成</small></div></div><div class="learning-steps"><div v-for="(item, index) in currentReport.learning" :key="index"><span>{{ String(index + 1).padStart(2, '0') }}</span><p>{{ item }}</p></div></div></div></section>
+            <section class="next-step-card"><div><span class="section-kicker">KEEP THE MOMENTUM</span><h2>下一次，会更清楚。</h2><p>报告仅反映本场实际覆盖的能力。</p></div><div class="next-step-actions"><button class="subtle-button" @click="navigate('home')">返回主页</button><button class="primary-button" @click="restartReport(currentReport)">重新面试 →</button></div></section>
+          </template>
         </template>
 
         <template v-else-if="page === 'banks'">

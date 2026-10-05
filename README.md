@@ -1,6 +1,6 @@
 # 面镜 InterviewMirror
 
-面向 AI 应用 / AI 全栈实习求职者的本地面试陪练应用。当前已完成本地工程基础和**简历 / 自定义题库管理**：资料上传后由本机 MinerU 异步解析，用户可以预览、编辑和确认；只有已确认资料可作为后续面试来源。正式 AI 面试、SSE 问答、动态报告和历史报告持久化仍在后续阶段。
+面向 AI 应用 / AI 全栈实习求职者的本地面试陪练应用。当前已具备本地登录、简历与自定义题库管理、综合/专项文字面试、PostgreSQL 持久化问答、异步面试报告和 PDF 导出。综合面试中的 JD 仅作为问题生成上下文；当前版本不提供岗位差异分析。模型调用默认关闭；启用后需在本地 `.env` 配置兼容模型服务，个人资料与回答会按界面提示发送给所配置的模型服务。项目只面向本地演示，不提供公网部署。
 
 ## 本地启动
 
@@ -46,7 +46,10 @@ MinIO 管理台凭证为 `.env` 中的 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWOR
 - 简历和题库保存到 PostgreSQL，原始文件保存到私有 MinIO。状态包括 `PENDING`、`PROCESSING`、`PARSED`、`FAILED`、`CONFIRMED`、`DELETING` 和 `DELETE_FAILED`；页面支持解析预览、字段 / 项目编辑、题目增删、失败重试和删除。保存编辑后的资料会失效原确认，需要重新确认。
 - 解析任务持久化在 PostgreSQL；Worker 领取任务使用租约和 attempt fencing，进程重启后回收过期任务，迟到的旧 Worker 结果不会覆盖新尝试。解析和对象存储不在单一事务内；MinIO 删除失败会保留 `DELETE_FAILED` 记录供用户重试。
 - `/api/v1/interview-sources/resumes/{id}` 与 `/api/v1/interview-sources/question-banks/{id}` 在后端强制校验当前用户归属和 `CONFIRMED` 状态；资料列表也支持 `?usableOnly=true`。前端禁用状态仅用于交互，不能代替后端门禁。
-- 报告及完整差异分析仍为只读示例数据，不属于账号私有历史记录；页面有提示。
+- 面试结束后由数据库任务 worker 异步生成持久化报告；任务失败可重试，worker 过期租约可恢复。
+- 报告保留总体评价和逐题回顾，按六个能力维度评分；不再单独展示一句话结论或“协作方式匹配”。证据 ID 由服务端对本场快照校验。缺少回答证据的评分为 `UNASSESSED`，提前结束会明确提示覆盖不完整。
+- 综合面试可填写 JD，供问题生成参考；岗位差异分析已停用。
+- 历史报告、报告详情、雷达图、重新面试和 PDF 导出均使用当前登录用户的 owner-scoped API。PDF 中文多页生成后存入私有 MinIO，并在下载时复验归属。
 - 仅本地演示；不提供公网部署、注册、邮件验证或生产级账号管理。
 
 主要 API：
@@ -84,7 +87,18 @@ DELETE /api/v1/question-banks/{uuid}
 GET    /api/v1/parse-tasks/{uuid}
 GET    /api/v1/interview-sources/resumes/{uuid}
 GET    /api/v1/interview-sources/question-banks/{uuid}
+GET    /api/v1/interviews/{uuid}/report-status
+POST   /api/v1/interviews/{uuid}/reports
+POST   /api/v1/interviews/{uuid}/reports/retry
+DELETE /api/v1/interviews/{uuid}/report
+GET    /api/v1/reports
+GET    /api/v1/reports/{uuid}
+GET    /api/v1/reports/{uuid}/pdf
 ```
+
+旧版差异分析 API 已停用并返回 `410 Gone`；新的报告任务不会创建差异分析任务，PDF 也不再包含差异分析内容。
+
+报告 API、证据契约、状态机和失败重试说明见 [`docs/phase4/PHASE4-SUMMARY.md`](docs/phase4/PHASE4-SUMMARY.md)、[`docs/phase4/REPORT-PIPELINE.md`](docs/phase4/REPORT-PIPELINE.md)。真实模型质量评测只使用合成数据，执行方法见 [`docs/phase4/EVALUATION.md`](docs/phase4/EVALUATION.md)；基础 Maven 测试用确定性替身，不代表真实模型效果。
 
 ## 停止与清理
 

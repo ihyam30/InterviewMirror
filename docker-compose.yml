@@ -64,6 +64,12 @@ services:
       INTERVIEW_MODEL_BASE_URL: ${INTERVIEW_MODEL_BASE_URL:-https://dashscope.aliyuncs.com/compatible-mode/v1}
       INTERVIEW_MODEL_API_KEY: ${INTERVIEW_MODEL_API_KEY:-disabled}
       INTERVIEW_MODEL_ID: ${INTERVIEW_MODEL_ID:-qwen-plus-2025-12-01}
+      REPORT_WORKER_ENABLED: ${REPORT_WORKER_ENABLED:-true}
+      REPORT_WORKER_ID: ${REPORT_WORKER_ID:-report-worker-local}
+      REPORT_POLL_INTERVAL: ${REPORT_POLL_INTERVAL:-PT2S}
+      REPORT_TASK_LEASE: ${REPORT_TASK_LEASE:-PT5M}
+      REPORT_MODEL_TIMEOUT: ${REPORT_MODEL_TIMEOUT:-PT180S}
+      PDF_CJK_FONT_PATH: ${PDF_CJK_FONT_PATH:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     ports:
