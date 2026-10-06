@@ -1,10 +1,183 @@
 # 面镜 InterviewMirror
 
-面向 AI 应用 / AI 全栈实习求职者的本地面试陪练应用。当前已具备本地登录、简历与自定义题库管理、综合/专项文字面试、PostgreSQL 持久化问答、异步面试报告和 PDF 导出。综合面试中的 JD 仅作为问题生成上下文；当前版本不提供岗位差异分析。模型调用默认关闭；启用后需在本地 `.env` 配置兼容模型服务，个人资料与回答会按界面提示发送给所配置的模型服务。项目只面向本地演示，不提供公网部署。
+> 面向求职者的本地 AI 模拟面试与复盘工具。通过简历、目标岗位和自定义题库，把练习、问答记录与报告整理在同一条流程里。
 
-## 本地启动
+## 项目介绍
 
-运行 Web 应用只需要 Docker Desktop（含 Docker Compose v2），不需要本机安装 Java、Maven、Node 或数据库。首次构建需要网络拉取容器镜像和 Maven/npm 依赖。文档解析另需本机已安装阶段 0 锁定的 MinerU Python 运行环境和模型文件；本地 Worker 仅绑定回环/容器宿主网络，不使用托管解析服务。
+InterviewMirror 是一个本地运行的 AI 面试练习应用，适合准备技术岗位面试、整理个人简历和复习自定义题库。用户可以导入简历或题库，检查解析结果并确认资料，再进行综合面试或题库专项面试。面试结束后，系统会异步生成报告，支持查看历史记录和导出 PDF。
+
+项目重点是建立一条可追溯的本地练习流程：
+
+```text
+简历 / 自定义题库 → 确认资料 → 模拟面试 → 保存问答 → 生成报告 → 导出 PDF
+```
+
+本项目当前定位为个人本地演示与开发，不提供注册、公网部署或生产级多租户服务。模型调用默认关闭；启用模型后，简历和回答会发送到 `.env` 中配置的模型服务，并遵循界面上的资料处理同意提示。
+
+## 系统架构
+
+```mermaid
+flowchart LR
+    Browser[浏览器]
+    Frontend[Vue 3 前端<br/>Vite 构建 / Nginx 托管]
+    Backend[Spring Boot API<br/>认证 / 资料 / 面试 / 报告]
+    PostgreSQL[(PostgreSQL<br/>业务数据 / 任务 / 事件 / checkpoint)]
+    MinIO[(MinIO 私有桶<br/>原始资料 / PDF 报告)]
+    MinerU[本机 MinerU Worker<br/>PDF / DOCX 解析]
+    LLM[用户配置的兼容模型服务<br/>可选，默认关闭]
+
+    Browser --> Frontend
+    Frontend -->|同源 /api| Backend
+    Backend <--> PostgreSQL
+    Backend <--> MinIO
+    Backend -->|文档解析请求| MinerU
+    Backend -. 启用模型并取得同意后 .-> LLM
+    Backend -->|SSE 面试事件| Frontend
+```
+
+前端通过 Nginx 访问后端 API，Session Cookie 和 CSRF 校验由服务端管理。PostgreSQL 使用 Flyway 自动迁移；简历、题库、面试记录和报告都按当前登录用户隔离。MinIO 使用私有桶，浏览器不会拿到对象存储凭证或永久文件 URL。
+
+## 技术栈
+
+### 前端
+
+| 技术 | 用途 |
+| --- | --- |
+| Vue 3.5 | 页面与交互 |
+| JavaScript ES Modules | 前端业务代码 |
+| Vite 7 | 开发服务器与生产构建 |
+| Node.js 测试运行器 | 前端单元测试 |
+| Nginx | Compose 环境下托管静态页面并反向代理 `/api/` |
+
+### 后端与基础设施
+
+| 技术 | 用途 |
+| --- | --- |
+| Java 21、Spring Boot 4.1.1 | 后端应用与 REST API |
+| Spring Security | Session 认证、CSRF 与当前用户上下文 |
+| Spring JDBC | PostgreSQL 访问与用户范围查询 |
+| Flyway | 数据库版本迁移与初始化 |
+| Spring AI 2.0.1 | OpenAI-compatible 模型接入 |
+| LangGraph4j 1.8.27 | 面试流程状态与 PostgreSQL checkpoint |
+| PostgreSQL 17.6 | 用户、资料、面试、任务和报告持久化 |
+| MinIO | 私有文件与 PDF 对象存储 |
+| Python 3.12、MinerU 4.0.10 | 本机 PDF / DOCX 文档解析 Worker |
+| Docker Compose | 本地启动前端、后端、PostgreSQL 与 MinIO |
+
+## 功能特性
+
+### 简历管理
+
+- 上传 PDF 或 DOCX，异步解析并在简历卡片和详情页查看结构化内容。
+- 展示基本信息、教育经历、专业技能、项目经历等解析结果。
+- 支持解析状态查看、失败重试、资料确认和删除；确认后的简历才可用于综合面试。
+- 解析 Worker 在本机运行，简历文件保存在私有 MinIO 中。
+
+### 自定义题库
+
+- 上传 PDF、DOCX、TXT 或 Markdown 题库，也可以手工创建题库。
+- 解析问题与参考答案，支持多行答案、题目增删改和分类编辑。
+- 解析或编辑后的题库需确认；后端会校验归属、状态和题目数量。
+- 专项面试要求题库至少包含 6 道有效题目。
+
+### 综合与专项模拟面试
+
+- 综合面试基于已确认简历生成问题，可填写 JD 作为问题生成上下文。
+- 专项面试从已确认的自定义题库中抽取问题。
+- 回答先持久化再推进流程；支持 SSE 事件、断线恢复和历史问答查看。
+- 每个主问题可进行有限次数的追问；专项面试在存在备用题时支持换题。
+- 开始面试前显示资料处理同意提示；未配置模型时不会创建面试记录。
+
+### 历史报告与 PDF
+
+- 面试完成后异步生成报告，历史列表展示生成状态与进度。
+- 报告包含总体评价、按面试模式展示的能力维度和逐题回顾。
+- 支持查看报告、失败重试、删除和中文 PDF 导出。
+- 岗位差异分析已从当前产品中停用。
+
+### 认证与数据隔离
+
+- 本地演示账号使用服务端 Session、HttpOnly Cookie 和 CSRF 校验。
+- 简历、题库、解析任务、面试和报告的查询均由后端按当前用户隔离。
+- 文件类型、MIME 和签名由服务端校验；对象桶保持私有。
+
+## 效果展示
+
+以下截图按首页、模拟面试、历史报告、自定义题库、我的简历的顺序排列。
+
+### 1. 首页
+
+![首页工作台](docs/images/readme/01-home.png)
+
+### 2. 模拟面试
+
+![模拟面试设置](docs/images/readme/02-mock-interview.png)
+
+### 3. 历史报告
+
+![历史报告](docs/images/readme/03-report-history.png)
+
+### 4. 自定义题库
+
+![自定义题库](docs/images/readme/04-question-bank.png)
+
+### 5. 我的简历
+
+![我的简历](docs/images/readme/05-resume-library.png)
+
+## 项目结构
+
+```text
+InterviewMirror/
+├── frontend/                  # Vue 3 前端、Vite、Nginx 与前端 Dockerfile
+│   ├── src/                   # 页面、API 客户端、展示逻辑与前端测试
+│   ├── package.json
+│   ├── vite.config.js
+│   ├── nginx.conf
+│   └── Dockerfile
+├── backend/                   # Spring Boot 后端
+│   ├── src/main/java/local/interviewmirror/backend/
+│   │   ├── documents/         # 简历、题库与解析任务
+│   │   ├── interviews/        # 面试流程、问答与恢复
+│   │   ├── reports/           # 报告生成、历史与 PDF
+│   │   ├── files/             # MinIO 文件访问
+│   │   ├── security/           # 登录、Session 与用户上下文
+│   │   └── common/             # 通用配置与基础组件
+│   ├── src/main/resources/db/migration/  # Flyway migration
+│   ├── src/test/              # 后端单元与集成测试
+│   ├── pom.xml
+│   └── Dockerfile
+├── scripts/                   # MinerU Worker、smoke、评测与阶段脚本
+├── docs/                      # 阶段说明、架构、验收与截图
+├── data/                      # PoC 与评测数据
+├── docker-compose.yml         # 本地应用服务编排
+└── .env.example               # 本地环境变量模板
+```
+
+## 快速开始
+
+### 环境要求
+
+| 场景 | 需要安装 |
+| --- | --- |
+| Docker 运行完整应用 | Docker Desktop 或 Docker Engine + Docker Compose v2 |
+| 前端本地开发 | Node.js 22、npm |
+| 后端本地开发 / 测试 | Java 21、Maven 3.9+ |
+| 简历及 PDF / DOCX 题库解析 | 已准备好的本机 MinerU 4.0.10 环境与模型文件 |
+
+只用 Docker 启动 Web 应用时，无需在宿主机安装 Java、Maven、Node 或数据库。首次构建需要下载容器镜像和依赖。
+
+### 克隆与启动
+
+```bash
+git clone https://github.com/ihyam30/InterviewMirror.git
+cd InterviewMirror
+cp .env.example .env
+docker compose up --build -d
+docker compose ps
+```
+
+Windows PowerShell 复制环境文件时使用：
 
 ```powershell
 Copy-Item .env.example .env
@@ -12,148 +185,115 @@ docker compose up --build -d
 docker compose ps
 ```
 
-首次 Maven 构建可能需要几分钟。后端 Flyway 自动创建数据库结构，首次启动时自动创建私有对象桶和两个本地演示账号。应用健康后访问：
+首次启动会自动运行 Flyway、创建私有 MinIO bucket 和本地演示账号。服务健康后打开：
 
 | 服务 | 地址 |
-|---|---|
-| Vue 前端 | http://127.0.0.1:5173 |
-| 后端健康状态 | http://127.0.0.1:8080/actuator/health |
-| PostgreSQL | `127.0.0.1:15432`（`.env` 中可调整） |
-| MinIO Console | http://127.0.0.1:9001 |
+| --- | --- |
+| 前端 | <http://127.0.0.1:5173> |
+| 后端健康检查 | <http://127.0.0.1:8080/actuator/health> |
+| MinIO Console | <http://127.0.0.1:9001> |
+| PostgreSQL | `127.0.0.1:15432` |
 
-演示账号（仅供本地开发）：
+演示账号仅供本机使用，默认密码可在 `.env` 中更改：
 
 | 用户名 | 示例密码 |
-|---|---|
-| `demo1` 或 `demo1@local.interviewmirror` | `MirrorDemo1!` |
-| `demo2` 或 `demo2@local.interviewmirror` | `MirrorDemo2!` |
+| --- | --- |
+| `demo1` | `MirrorDemo1!` |
+| `demo2` | `MirrorDemo2!` |
 
-可在本地 `.env` 覆盖演示密码及服务端口。`.env` 不纳入 Git。不要将默认示例凭证用于共享或公网环境。所有 Compose 宿主机端口都绑定到 `127.0.0.1`。开始文档解析前，在 `.env` 设置至少 32 字符的随机 `MINERU_WORKER_TOKEN`，并在独立 PowerShell 窗口运行：
+### 启用模型面试
+
+模型调用默认关闭。需要面试出题或生成报告时，在 `.env` 配置兼容模型服务，例如：
+
+```dotenv
+INTERVIEW_MODEL_ENABLED=true
+INTERVIEW_MODEL_PROVIDER=QWEN
+INTERVIEW_MODEL_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+INTERVIEW_MODEL_API_KEY=替换为你自己的模型服务密钥
+INTERVIEW_MODEL_ID=qwen-plus-2025-12-01
+```
+
+然后重建后端容器：
+
+```bash
+docker compose up -d --build backend
+```
+
+不要把真实 API Key 提交到仓库。启用模型后，只有在用户同意资料处理时才会把相关简历或回答发送给所配置的服务。
+
+### 启用 MinerU 文档解析
+
+PDF / DOCX 简历和题库解析需要本机 MinerU Worker。先在 `.env` 中为 `MINERU_WORKER_TOKEN` 设置独立随机值（至少 32 个字符），然后在 Windows PowerShell 启动 Worker：
 
 ```powershell
 pwsh -File .\scripts\phase2\start-mineru-worker.ps1
 ```
 
-Worker 启动时验证锁定的 MinerU 运行时及本地模型。文本题库直接读取 UTF-8 文本；PDF/DOCX 走本机 MinerU 4.0.10。Worker 绑定 `127.0.0.1`，由 Docker host gateway 转发供 Compose 后端访问，并要求独立随机令牌；Compose 不发布此端口。不要把端口改成公网监听或复用其他 API Key 作为访问令牌。没有运行 Worker 时，持久化任务会显示失败状态；启动 Worker 后在资料页点“重新解析”即可重试。
+Worker 绑定本机回环地址，不使用云解析服务。TXT / Markdown 题库由后端直接读取文本。Worker 不运行时，解析任务会显示失败状态；启动 Worker 后可在资料页面重试。
 
-MinIO 管理台凭证为 `.env` 中的 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWORD`。产品文件桶为私有桶；前端不会获得 S3 凭证或永久/预签名对象 URL。Compose 使用官方归档源码固定 tag 构建 MinIO，不依赖已下架的 Community 镜像仓库或发布二进制。官方 MinIO Community 仓库已归档，源码构建产物不受上游支持，因此此配置仅适用于绑定到 loopback 的个人本地演示；不得复用于共享或公网服务。未来扩展使用前应切换到有持续维护的发行版或兼容对象存储，并重新执行对象访问权限与兼容性验收。
+## Docker 快速部署
 
-## 当前能力和边界
+Compose 会启动四个核心服务：
 
-前端工程位于 `frontend/`：Vue 页面与 API 客户端在 `frontend/src/`，npm 清单、Vite 配置、Nginx 配置和前端镜像 Dockerfile 也都在该目录。Compose 从 `frontend/` 独立构建前端镜像。
+| 容器 | 职责 |
+| --- | --- |
+| `frontend` | Nginx 托管 Vue 静态资源并代理 `/api/` |
+| `backend` | Spring Boot API、面试与报告 Worker、Flyway |
+| `postgres` | 保存账户、资料、面试、报告和任务状态 |
+| `minio` | 私有文件及 PDF 对象存储 |
 
-- 用户名或邮箱登录、当前用户、退出登录；服务端 Session Cookie（HttpOnly、SameSite=Strict）与 CSRF 校验。
-- `/api/v1/resources` 提供用户私有资源 CRUD；数据库查询、更新和删除均把认证用户 ID 放进 SQL 条件，跨账号不存在性统一返回 404。
-- `/api/v1/files` 提供用户私有文件上传、metadata、下载和删除；服务端仅接受 PDF、DOCX、TXT 和 Markdown，并校验扩展名、MIME 类型及 PDF/DOCX 文件签名；文件大小上限 20 MiB；API 不返回对象 key，私有桶不能匿名直连。
-- 简历和题库保存到 PostgreSQL，原始文件保存到私有 MinIO。状态包括 `PENDING`、`PROCESSING`、`PARSED`、`FAILED`、`CONFIRMED`、`DELETING` 和 `DELETE_FAILED`；页面支持解析预览、字段 / 项目编辑、题目增删、失败重试和删除。保存编辑后的资料会失效原确认，需要重新确认。
-- 解析任务持久化在 PostgreSQL；Worker 领取任务使用租约和 attempt fencing，进程重启后回收过期任务，迟到的旧 Worker 结果不会覆盖新尝试。解析和对象存储不在单一事务内；MinIO 删除失败会保留 `DELETE_FAILED` 记录供用户重试。
-- `/api/v1/interview-sources/resumes/{id}` 与 `/api/v1/interview-sources/question-banks/{id}` 在后端强制校验当前用户归属和 `CONFIRMED` 状态；资料列表也支持 `?usableOnly=true`。前端禁用状态仅用于交互，不能代替后端门禁。
-- 面试结束后由数据库任务 worker 异步生成持久化报告；任务失败可重试，worker 过期租约可恢复。
-- 报告保留总体评价和逐题回顾，按六个能力维度评分；不再单独展示一句话结论或“协作方式匹配”。证据 ID 由服务端对本场快照校验。缺少回答证据的评分为 `UNASSESSED`，提前结束会明确提示覆盖不完整。
-- 综合面试可填写 JD，供问题生成参考；岗位差异分析已停用。
-- 历史报告、报告详情、雷达图、重新面试和 PDF 导出均使用当前登录用户的 owner-scoped API。PDF 中文多页生成后存入私有 MinIO，并在下载时复验归属。
-- 仅本地演示；不提供公网部署、注册、邮件验证或生产级账号管理。
+从项目根目录执行：
 
-主要 API：
-
-```text
-GET    /api/v1/auth/csrf
-POST   /api/v1/auth/login
-GET    /api/v1/auth/me
-POST   /api/v1/auth/logout
-GET    /api/v1/resources?type=RESUME
-POST   /api/v1/resources
-GET    /api/v1/resources/{uuid}
-PUT    /api/v1/resources/{uuid}
-DELETE /api/v1/resources/{uuid}
-GET    /api/v1/files
-POST   /api/v1/files                 multipart field: file
-GET    /api/v1/files/{uuid}
-GET    /api/v1/files/{uuid}/content
-DELETE /api/v1/files/{uuid}
-GET    /api/v1/resumes?usableOnly=false
-POST   /api/v1/resumes                 multipart field: file
-GET    /api/v1/resumes/{uuid}
-PUT    /api/v1/resumes/{uuid}          contentVersion 乐观锁
-POST   /api/v1/resumes/{uuid}/confirm
-POST   /api/v1/resumes/{uuid}/retry
-DELETE /api/v1/resumes/{uuid}
-GET    /api/v1/question-banks?usableOnly=false
-POST   /api/v1/question-banks          multipart field: file
-POST   /api/v1/question-banks/manual
-GET    /api/v1/question-banks/{uuid}
-PUT    /api/v1/question-banks/{uuid}
-POST   /api/v1/question-banks/{uuid}/confirm
-POST   /api/v1/question-banks/{uuid}/retry
-DELETE /api/v1/question-banks/{uuid}
-GET    /api/v1/parse-tasks/{uuid}
-GET    /api/v1/interview-sources/resumes/{uuid}
-GET    /api/v1/interview-sources/question-banks/{uuid}
-GET    /api/v1/interviews/{uuid}/report-status
-POST   /api/v1/interviews/{uuid}/reports
-POST   /api/v1/interviews/{uuid}/reports/retry
-DELETE /api/v1/interviews/{uuid}/report
-GET    /api/v1/reports
-GET    /api/v1/reports/{uuid}
-GET    /api/v1/reports/{uuid}/pdf
+```bash
+cp .env.example .env
+docker compose up --build -d
+docker compose ps
 ```
 
-旧版差异分析 API 已停用并返回 `410 Gone`；新的报告任务不会创建差异分析任务，PDF 也不再包含差异分析内容。
+常用命令：
 
-报告 API、证据契约、状态机和失败重试说明见 [`docs/phase4/PHASE4-SUMMARY.md`](docs/phase4/PHASE4-SUMMARY.md)、[`docs/phase4/REPORT-PIPELINE.md`](docs/phase4/REPORT-PIPELINE.md)。真实模型质量评测只使用合成数据，执行方法见 [`docs/phase4/EVALUATION.md`](docs/phase4/EVALUATION.md)；基础 Maven 测试用确定性替身，不代表真实模型效果。
+```bash
+# 查看服务日志
+docker compose logs -f backend frontend
 
-## 停止与清理
-
-```powershell
+# 停止服务，保留数据卷
 docker compose down
-```
 
-清除数据库、账号、资料和对象文件并回到首次启动状态（**会删除本机应用数据**）：
-
-```powershell
+# 删除服务并重置数据库和文件（会清除本地数据）
 docker compose down --volumes --remove-orphans
 ```
 
+所有 Compose 宿主机端口默认只绑定 `127.0.0.1`，这是本地演示配置，不应直接暴露到公网。MinIO Community 上游已归档；当前 Compose 构建配置仅面向个人本地演示，若用于共享环境应先更换受支持的对象存储并重新审查安全配置。
+
+## 使用场景
+
+- **求职者个人练习：**用自己的简历开始综合面试，围绕目标岗位描述练习项目和技术问题。
+- **专项复习：**把常见题目导入或手工整理成题库，确认后进行有针对性的问答练习。
+- **面试复盘：**回看历史问答与报告，导出 PDF 保存阶段性练习记录。
+- **本地项目演示：**展示 Vue、Spring Boot、异步任务、PostgreSQL、MinIO、MinerU 和模型服务的集成流程。
+
+本地演示账号和数据空间适合个人验证与功能演示；当前不提供面向 HR 的批量简历处理、团队协作或公网多租户能力。
+
 ## 开发与测试
 
-本机开发需要 Node.js 22、npm、Java 21、Maven 3.9+、Docker Desktop。
-
-```powershell
+```bash
+# 前端测试与构建
 npm ci --prefix frontend
 npm test --prefix frontend
 npm run build --prefix frontend
+
+# 后端测试
 mvn -B -f backend/pom.xml test
+
+# Compose 配置检查
 docker compose config --quiet
 ```
 
-本地启动整个应用仍使用 `docker compose up --build -d`。后端集成测试使用 H2 和内存对象存储替身验证两用户的资源、文件访问隔离；本机 Compose 验收还应验证真实 PostgreSQL、MinIO 和各 HTTP API。CI 在干净 GitHub Actions runner 上执行前端测试/构建、后端测试和 Compose 配置校验。
+项目阶段文档和详细验收记录位于 [`docs/`](docs/)，包括资料解析、面试运行时、报告生成和本地演示说明。
 
-阶段 2 MinerU 全量评测要求已安装并启动本地 Worker、Compose 服务健康、`.env` 中 `DEMO2_PASSWORD` 与服务端一致：
+## 安全与数据说明
 
-```powershell
-pwsh -File .\scripts\phase2\run-evaluation.ps1 -PerDocumentTimeout 600
-scripts\poc\.mineru\Scripts\python.exe scripts\phase2\export_evaluation_snapshot.py
-```
-
-评测脚本验证锁定 Python / 数据集 SHA，对 30 份合成样例逐份走真实上传、任务、解析与结构化保存，原始结果写入被 Git 忽略的 `data/poc/results/phase2/live-evaluation.json`，可审阅快照保存在 `docs/phase2/results/live-evaluation.json`；脚本只删除本轮创建的资料，并会报告清理失败。当前数据集为受控合成样例，不含真实个人信息；尚未由独立第二位评审者复核全部标注，真实简历分布上的泛化能力仍需后续授权样本验证。详见 [`docs/phase2/EVALUATION.md`](docs/phase2/EVALUATION.md) 和 [`docs/phase2/PARSING-PIPELINE.md`](docs/phase2/PARSING-PIPELINE.md)。
-
-Compose 健康后可执行真实服务 smoke test（脚本会创建并在末尾删除一条合成资源和文件）：
-
-```powershell
-pwsh -File .\scripts\phase1-smoke.ps1
-```
-
-架构和本地操作说明见 [`docs/phase1/LOCAL-DEVELOPMENT.md`](docs/phase1/LOCAL-DEVELOPMENT.md)。
-
-## 阶段 5 本地演示与验收
-
-阶段 5 使用独立 Compose project `interviewmirror-phase5`，映射前端 `15173`、后端 `18080`、PostgreSQL `25432`、MinIO `19000/19001`，不会复用或清理默认 `interviewmirror-local` 的数据卷。演示流程见 [`docs/phase5/LOCAL-DEMO.md`](docs/phase5/LOCAL-DEMO.md)，评审演示步骤见 [`docs/phase5/DEMO-SCRIPT.md`](docs/phase5/DEMO-SCRIPT.md)，常见故障见 [`docs/phase5/TROUBLESHOOTING.md`](docs/phase5/TROUBLESHOOTING.md)，真实执行命令和数据集见 [`docs/phase5/EVALUATION.md`](docs/phase5/EVALUATION.md)，本轮实测数据和边界见 [`docs/phase5/PHASE5-SUMMARY.md`](docs/phase5/PHASE5-SUMMARY.md)。
-
-```powershell
-pwsh -File scripts/phase5/preflight.ps1
-pwsh -File scripts/phase5/start-demo.ps1
-pwsh -File scripts/phase5/seed-demo.ps1
-pwsh -File scripts/phase5/check-demo.ps1
-```
-
-Phase 5 的脚本会输出真实服务状态、三次面试时长、普通 API p95/p99、模型 SSE TTFT、报告 worker 时长和 usage 成本结果。真实模型脚本使用合成提示词，默认需显式 `-RunModelCalls` 以确认可能产生的费用。冷环境 15 分钟验收必须在无 Docker/依赖缓存的新开发环境计时；当前机器不执行全局 Docker 缓存清理。性能、价格假设和 PDF 视觉验收见 [`docs/phase5/PERFORMANCE-AND-COST.md`](docs/phase5/PERFORMANCE-AND-COST.md) 和 [`docs/phase5/PDF-VISUAL-REVIEW.md`](docs/phase5/PDF-VISUAL-REVIEW.md)。Phase 5 演示账号仍使用 `.env` 中的本地 `demo1` / `demo2`。
+- `.env` 仅用于本机配置，已被 Git 忽略；不要提交密码、对象存储凭证或模型密钥。
+- 用户资料通过服务端 Session 认证，并在后端按 owner 隔离；MinIO bucket 不公开。
+- 开启模型服务前请确认供应商、模型和资料处理范围；传输内容受对应供应商的数据策略约束。
+- 当前 Compose 仅绑定 loopback，项目没有完成公网生产部署与生产级账号管理验收。
