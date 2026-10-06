@@ -23,6 +23,7 @@ import local.interviewmirror.backend.reports.ReportRepository.GapRow;
 import local.interviewmirror.backend.reports.ReportRepository.PdfRow;
 import local.interviewmirror.backend.reports.ReportRepository.ReportRow;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.ObjectMapper;
@@ -31,6 +32,16 @@ import tools.jackson.databind.json.JsonMapper;
 class ReportPdfServiceTest {
     private static final ObjectMapper JSON = JsonMapper.builder().build();
     private static final String FONT = "C:/Windows/Fonts/msyh.ttc";
+
+    @Test
+    void rejectsFontThatFailsGlyphWidthProbeBeforeRendering() throws Exception {
+        PDFont unsupportedFont = mock(PDFont.class);
+        when(unsupportedFont.getStringWidth("面试报告"))
+                .thenThrow(new UnsupportedOperationException("OTF fonts do not have a glyf table"));
+
+        assertThrows(UnsupportedOperationException.class,
+                () -> ReportPdfService.validateFontForOutput(unsupportedFont));
+    }
 
     @Test
     void rendersChineseMultiPageReportAndKeepsUnassessedDimensionOutOfZeroScale() throws Exception {

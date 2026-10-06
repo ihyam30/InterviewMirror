@@ -239,7 +239,7 @@ public class ReportPdfService {
                     if (font != null) {
                         try {
                             PDFont embedded = PDType0Font.load(document, font, true);
-                            embedded.encode("面试报告"); // Probe glyph access now; some CFF collections fail only on first use.
+                            validateFontForOutput(embedded);
                             return new FontHandle(embedded, collection);
                         }
                         catch (Exception failure) { collection.close(); collection = null; throw failure; }
@@ -247,7 +247,7 @@ public class ReportPdfService {
                     collection.close(); collection = null;
                 } else {
                     PDFont embedded = PDType0Font.load(document, file);
-                    embedded.encode("面试报告");
+                    validateFontForOutput(embedded);
                     return new FontHandle(embedded, null);
                 }
             } catch (Exception failure) {
@@ -258,6 +258,14 @@ public class ReportPdfService {
         }
         throw new IllegalStateException("A CJK TrueType font is required for report PDF output");
     }
+
+    static void validateFontForOutput(PDFont font) throws Exception {
+        String probe = "面试报告";
+        font.encode(probe);
+        // Some CFF-based OpenType fonts encode text but fail later when PDFBox measures glyph widths.
+        font.getStringWidth(probe);
+    }
+
     private record FontHandle(PDFont font, TrueTypeCollection collection) implements AutoCloseable {
         @Override public void close() throws Exception { if (collection != null) collection.close(); }
     }
