@@ -1,0 +1,17 @@
+{
+  "checkedAtUtc": "2026-10-06T09:59:21.2914477+00:00",
+  "loginReadyAtUtc": "2026-10-06T09:59:21.2281485+00:00",
+  "startupToLoginMs": 504228,
+  "startupCacheState": "warm-or-existing-cache; Docker/BuildKit caches were preserved",
+  "project": "interviewmirror-phase5",
+  "frontend": "PASS",
+  "backend": "PASS",
+  "postgres": "PASS",
+  "minio": "PASS",
+  "loginAs": "demo1",
+  "confirmedSyntheticResume": "PASS",
+  "confirmedSyntheticQuestionBank": "PASS",
+  "reportHistory": "No pre-seeded report; create a live demo interview to generate one.",
+  "modelConfigurationPresent": true,
+  "mineruWorker": "NOT_REQUIRED_FOR_SEEDED_FIXTURES"
+}

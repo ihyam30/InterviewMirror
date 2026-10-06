@@ -1,7 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { currentUser as fetchCurrentUser, confirmDocument, createDocument, createQuestionBank, deleteDocument, deleteInterviewReport, downloadFile, getDocument, listDocuments, login as apiLogin, logout as apiLogout, retryDocument, updateDocument, validateInterviewSource, createInterview, listInterviews, getInterview, startInterview, getInterviewTurns, answerInterview, replaceInterviewQuestion, endInterview, openInterviewEvents, listReports as apiListReports, getReport as apiGetReport, getInterviewReportStatus, requestInterviewReport, retryInterviewReport, downloadReportPdf } from './api.js'
-import { canReviewDocument, canRetryDocument, documentStatusLabel } from './document-state.js'
+import { restoreSession, confirmDocument, createDocument, createQuestionBank, deleteDocument, deleteInterviewReport, downloadFile, getDocument, listDocuments, login as apiLogin, logout as apiLogout, retryDocument, updateDocument, validateInterviewSource, createInterview, listInterviews, getInterview, startInterview, getInterviewTurns, answerInterview, replaceInterviewQuestion, endInterview, openInterviewEvents, listReports as apiListReports, getReport as apiGetReport, getInterviewReportStatus, requestInterviewReport, retryInterviewReport, downloadReportPdf } from './api.js'
+import { canReviewDocument, canRetryDocument, documentStatusLabel, questionBankReviewCopy } from './document-state.js'
 import { resumeViewModel } from './resume-display.js'
 import { reportTaskLabel, visibleReportScores } from './report-display.js'
 
@@ -77,6 +77,7 @@ const reportTitleDraft = ref('')
 const toast = ref('')
 const reviewDialog = ref(false)
 const pendingReview = ref(null)
+const pendingReviewCopy = computed(() => questionBankReviewCopy(pendingReview.value))
 const resumeInput = ref(null)
 const bankInput = ref(null)
 let toastTimer
@@ -223,7 +224,7 @@ async function loadOwnedResources() {
 
 onMounted(async () => {
   try {
-    currentUserInfo.value = await fetchCurrentUser()
+    currentUserInfo.value = await restoreSession()
     restoreExplicitReportReturn()
     await loadOwnedResources()
     await loadReportHistory()
@@ -1320,9 +1321,9 @@ function resetDemo() {
 
     <div v-if="reviewDialog && pendingReview" class="dialog-scrim" @click.self="cancelReview">
       <section class="review-dialog" role="dialog" aria-modal="true" aria-label="确认题库解析结果">
-        <div class="dialog-top"><div><span class="section-kicker">REVIEW BEFORE USE</span><h2>检查并编辑题库</h2><p>来源文件已完成本地解析。保存修改后需再次确认，才能用于面试。</p></div><button class="dialog-close" aria-label="稍后检查" @click="cancelReview">×</button></div>
+        <div class="dialog-top"><div><span class="section-kicker">REVIEW BEFORE USE</span><h2>检查并编辑题库</h2><p>{{ pendingReviewCopy.description }}</p></div><button class="dialog-close" aria-label="稍后检查" @click="cancelReview">×</button></div>
         <label class="field-label">题库名称</label><input v-model="pendingReview.name" class="text-field" />
-        <div class="question-review-heading"><span class="field-label">解析出的题目</span><button class="text-button" @click="addQuestion">＋ 添加问题</button></div>
+        <div class="question-review-heading"><span class="field-label">{{ pendingReviewCopy.listTitle }}</span><button class="text-button" @click="addQuestion">＋ 添加问题</button></div>
         <div class="question-review-list"><div v-for="(question, index) in pendingReview.questions" :key="index" class="question-edit-row"><span>{{ String(index + 1).padStart(2, '0') }}</span><div><textarea v-model="question.stem" class="text-field" placeholder="题目"></textarea><textarea v-model="question.answer" class="text-field question-answer-field" rows="5" placeholder="参考答案（可选，支持多行）"></textarea><input v-model="question.category" class="text-field" placeholder="分类（可选）" /></div><button @click="removeQuestion(index)" title="删除问题">×</button></div></div>
         <div class="dialog-footnote"><span>◇</span> 原始文件和解析结果仅对当前账号可见；未确认的资料不会被面试来源接口接受。</div>
         <div class="dialog-actions"><button class="subtle-button" @click="cancelReview">稍后检查</button><button class="subtle-button" @click="saveReviewedDocument(false)">保存修改</button><button class="primary-button" @click="confirmReview">保存并确认 <span>→</span></button></div>

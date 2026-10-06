@@ -1,0 +1,25 @@
+{
+  "measuredAtUtc": "2026-10-06T09:42:26.3954744+00:00",
+  "syntheticOnly": true,
+  "sinceUtc": "2026-10-06T09:32:41.4190610+00:00",
+  "modelIds": [
+    "qwen-plus-2025-12-01"
+  ],
+  "usageCalls": 17,
+  "usageMissingCount": 0,
+  "modelFailureLogCount": 0,
+  "completedInterviews": 3,
+  "successfulReports": 3,
+  "failedReports": 0,
+  "inputTokens": 21971,
+  "outputTokens": 7286,
+  "inputPriceCnyPerMillion": 0.8,
+  "outputPriceCnyPerMillion": 2.0,
+  "observedTotalCostCny": 0.032149,
+  "averageCostPerCompletedInterviewCny": 0.010716,
+  "assumedInterviewsPerMonth": 100,
+  "estimatedMonthlyCostCny": 1.07,
+  "monthlyBudgetCny": 300,
+  "budgetPass": true,
+  "costCoverage": "COMPLETE_FOR_SUCCESSFUL_LOGGED_WORKFLOWS"
+}

@@ -47,7 +47,7 @@ if (-not $mavenCommand) { throw 'Maven 3.9+ is not available in PATH. Install Ma
 $mavenPath = if ($mavenCommand.Source) { $mavenCommand.Source } else { $mavenCommand.FullName }
 
 Write-Host 'Running Phase 4 evaluation using synthetic fixtures only.'
-Write-Host 'Maximum planned provider calls: 10 report generations + 8 eligible gap analyses.'
+Write-Host 'Maximum planned provider calls: 10 synthetic report generations plus summary/dimension evidence reviews as needed. Disabled gap analysis is never called.'
 Write-Host 'Credentials are loaded from .env and will not be printed.'
 Push-Location $repo
 try {

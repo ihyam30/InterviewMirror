@@ -1,0 +1,213 @@
+{
+  "measuredAtUtc": "2026-10-06T09:11:56.893Z",
+  "syntheticOnly": true,
+  "provider": "QWEN",
+  "model": "qwen-plus-2025-12-01",
+  "measurement": "Direct provider SSE; TTFT is first non-empty assistant text delta; app interview endpoint currently returns complete structured objects, not streaming tokens.",
+  "sampleCount": 20,
+  "successCount": 20,
+  "failureCount": 0,
+  "ttftMs": {
+    "p50": 340.18,
+    "p95": 530.95,
+    "max": 915.51
+  },
+  "fullResponseMs": {
+    "p50": 830.3,
+    "p95": 1043.75,
+    "max": 1353.83
+  },
+  "usageReported": true,
+  "inputTokens": 1071,
+  "outputTokens": 677,
+  "ratesCnyPerMillion": {
+    "input": 0.8,
+    "output": 2
+  },
+  "measuredCallCostCny": 0.002211,
+  "monthlyBudgetCny": 300,
+  "monthlyCallsAtBudgetEstimate": 2713704,
+  "errorTypes": [],
+  "samples": [
+    {
+      "sample": 1,
+      "status": "SUCCESS",
+      "ttftMs": 915.51,
+      "totalMs": 1353.83,
+      "promptTokens": 53,
+      "completionTokens": 32,
+      "errorType": null
+    },
+    {
+      "sample": 2,
+      "status": "SUCCESS",
+      "ttftMs": 424.94,
+      "totalMs": 903.04,
+      "promptTokens": 53,
+      "completionTokens": 35,
+      "errorType": null
+    },
+    {
+      "sample": 3,
+      "status": "SUCCESS",
+      "ttftMs": 502.04,
+      "totalMs": 1002.69,
+      "promptTokens": 53,
+      "completionTokens": 35,
+      "errorType": null
+    },
+    {
+      "sample": 4,
+      "status": "SUCCESS",
+      "ttftMs": 528.42,
+      "totalMs": 906.74,
+      "promptTokens": 53,
+      "completionTokens": 26,
+      "errorType": null
+    },
+    {
+      "sample": 5,
+      "status": "SUCCESS",
+      "ttftMs": 387.64,
+      "totalMs": 861.27,
+      "promptTokens": 53,
+      "completionTokens": 35,
+      "errorType": null
+    },
+    {
+      "sample": 6,
+      "status": "SUCCESS",
+      "ttftMs": 323.09,
+      "totalMs": 796.22,
+      "promptTokens": 53,
+      "completionTokens": 35,
+      "errorType": null
+    },
+    {
+      "sample": 7,
+      "status": "SUCCESS",
+      "ttftMs": 319.82,
+      "totalMs": 825.23,
+      "promptTokens": 53,
+      "completionTokens": 35,
+      "errorType": null
+    },
+    {
+      "sample": 8,
+      "status": "SUCCESS",
+      "ttftMs": 196.26,
+      "totalMs": 932.18,
+      "promptTokens": 53,
+      "completionTokens": 34,
+      "errorType": null
+    },
+    {
+      "sample": 9,
+      "status": "SUCCESS",
+      "ttftMs": 298.86,
+      "totalMs": 772.38,
+      "promptTokens": 53,
+      "completionTokens": 31,
+      "errorType": null
+    },
+    {
+      "sample": 10,
+      "status": "SUCCESS",
+      "ttftMs": 340.18,
+      "totalMs": 821.91,
+      "promptTokens": 54,
+      "completionTokens": 33,
+      "errorType": null
+    },
+    {
+      "sample": 11,
+      "status": "SUCCESS",
+      "ttftMs": 318.9,
+      "totalMs": 799.14,
+      "promptTokens": 54,
+      "completionTokens": 35,
+      "errorType": null
+    },
+    {
+      "sample": 12,
+      "status": "SUCCESS",
+      "ttftMs": 333.95,
+      "totalMs": 814.44,
+      "promptTokens": 54,
+      "completionTokens": 35,
+      "errorType": null
+    },
+    {
+      "sample": 13,
+      "status": "SUCCESS",
+      "ttftMs": 354.91,
+      "totalMs": 830.3,
+      "promptTokens": 54,
+      "completionTokens": 35,
+      "errorType": null
+    },
+    {
+      "sample": 14,
+      "status": "SUCCESS",
+      "ttftMs": 305.28,
+      "totalMs": 773.38,
+      "promptTokens": 54,
+      "completionTokens": 35,
+      "errorType": null
+    },
+    {
+      "sample": 15,
+      "status": "SUCCESS",
+      "ttftMs": 307.43,
+      "totalMs": 813.03,
+      "promptTokens": 54,
+      "completionTokens": 35,
+      "errorType": null
+    },
+    {
+      "sample": 16,
+      "status": "SUCCESS",
+      "ttftMs": 428.73,
+      "totalMs": 921.99,
+      "promptTokens": 54,
+      "completionTokens": 34,
+      "errorType": null
+    },
+    {
+      "sample": 17,
+      "status": "SUCCESS",
+      "ttftMs": 530.95,
+      "totalMs": 943.53,
+      "promptTokens": 54,
+      "completionTokens": 27,
+      "errorType": null
+    },
+    {
+      "sample": 18,
+      "status": "SUCCESS",
+      "ttftMs": 224.72,
+      "totalMs": 1043.75,
+      "promptTokens": 54,
+      "completionTokens": 37,
+      "errorType": null
+    },
+    {
+      "sample": 19,
+      "status": "SUCCESS",
+      "ttftMs": 351.56,
+      "totalMs": 830.07,
+      "promptTokens": 54,
+      "completionTokens": 35,
+      "errorType": null
+    },
+    {
+      "sample": 20,
+      "status": "SUCCESS",
+      "ttftMs": 416.36,
+      "totalMs": 956.57,
+      "promptTokens": 54,
+      "completionTokens": 38,
+      "errorType": null
+    }
+  ]
+}

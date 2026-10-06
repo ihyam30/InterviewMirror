@@ -23,3 +23,16 @@ export function canRetryDocument(document) {
 export function canUseDocument(document) {
   return document?.status === 'CONFIRMED' && document?.usableForInterview === true
 }
+
+export function questionBankReviewCopy(document) {
+  if (document?.fileId) {
+    return {
+      description: '来源文件已完成本地解析。保存修改后需再次确认，才能用于面试。',
+      listTitle: '解析出的题目',
+    }
+  }
+  return {
+    description: '这是手工创建的题库。保存修改后需确认，才能用于面试。',
+    listTitle: '题目列表',
+  }
+}

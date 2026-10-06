@@ -1,0 +1,7 @@
+{
+  "measuredAtUtc": "2026-10-06T09:32:41.4190610+00:00",
+  "backendContainer": "interviewmirror-phase5-backend-1",
+  "image": "interviewmirror-phase5-backend:latest",
+  "sourceRevision": "0f16234",
+  "note": "Start boundary for post-optimization Phase 5 real report and cost samples."
+}

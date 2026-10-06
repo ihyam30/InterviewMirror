@@ -142,3 +142,16 @@ pwsh -File .\scripts\phase1-smoke.ps1
 ```
 
 架构和本地操作说明见 [`docs/phase1/LOCAL-DEVELOPMENT.md`](docs/phase1/LOCAL-DEVELOPMENT.md)。
+
+## 阶段 5 本地演示与验收
+
+阶段 5 使用独立 Compose project `interviewmirror-phase5`，映射前端 `15173`、后端 `18080`、PostgreSQL `25432`、MinIO `19000/19001`，不会复用或清理默认 `interviewmirror-local` 的数据卷。演示流程见 [`docs/phase5/LOCAL-DEMO.md`](docs/phase5/LOCAL-DEMO.md)，评审演示步骤见 [`docs/phase5/DEMO-SCRIPT.md`](docs/phase5/DEMO-SCRIPT.md)，常见故障见 [`docs/phase5/TROUBLESHOOTING.md`](docs/phase5/TROUBLESHOOTING.md)，真实执行命令和数据集见 [`docs/phase5/EVALUATION.md`](docs/phase5/EVALUATION.md)，本轮实测数据和边界见 [`docs/phase5/PHASE5-SUMMARY.md`](docs/phase5/PHASE5-SUMMARY.md)。
+
+```powershell
+pwsh -File scripts/phase5/preflight.ps1
+pwsh -File scripts/phase5/start-demo.ps1
+pwsh -File scripts/phase5/seed-demo.ps1
+pwsh -File scripts/phase5/check-demo.ps1
+```
+
+Phase 5 的脚本会输出真实服务状态、三次面试时长、普通 API p95/p99、模型 SSE TTFT、报告 worker 时长和 usage 成本结果。真实模型脚本使用合成提示词，默认需显式 `-RunModelCalls` 以确认可能产生的费用。冷环境 15 分钟验收必须在无 Docker/依赖缓存的新开发环境计时；当前机器不执行全局 Docker 缓存清理。性能、价格假设和 PDF 视觉验收见 [`docs/phase5/PERFORMANCE-AND-COST.md`](docs/phase5/PERFORMANCE-AND-COST.md) 和 [`docs/phase5/PDF-VISUAL-REVIEW.md`](docs/phase5/PDF-VISUAL-REVIEW.md)。Phase 5 演示账号仍使用 `.env` 中的本地 `demo1` / `demo2`。

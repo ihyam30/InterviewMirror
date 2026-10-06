@@ -1,4 +1,5 @@
 let csrfToken = ''
+let csrfRefreshPromise = null
 
 function clearExpiredSession() {
   csrfToken = ''
@@ -14,11 +15,15 @@ export class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
+  const method = (options.method || 'GET').toUpperCase()
+  const requiresCsrf = !['GET', 'HEAD', 'OPTIONS'].includes(method)
+  if (requiresCsrf && !csrfToken) await refreshCsrf()
+
   const headers = new Headers(options.headers || {})
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
-  if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method.toUpperCase()) && csrfToken) {
+  if (requiresCsrf && csrfToken) {
     headers.set('X-XSRF-TOKEN', csrfToken)
   }
   let response
@@ -39,10 +44,15 @@ async function request(path, options = {}) {
 }
 
 export async function refreshCsrf() {
+  if (csrfRefreshPromise) return csrfRefreshPromise
   csrfToken = ''
-  const data = await request('/api/v1/auth/csrf')
-  csrfToken = data.token
-  return csrfToken
+  csrfRefreshPromise = request('/api/v1/auth/csrf')
+    .then((data) => {
+      csrfToken = data.token
+      return csrfToken
+    })
+    .finally(() => { csrfRefreshPromise = null })
+  return csrfRefreshPromise
 }
 
 export async function login(identifier, password) {
@@ -57,6 +67,12 @@ export async function login(identifier, password) {
 
 export async function currentUser() {
   return request('/api/v1/auth/me')
+}
+
+export async function restoreSession() {
+  const user = await currentUser()
+  await refreshCsrf()
+  return user
 }
 
 export async function logout() {

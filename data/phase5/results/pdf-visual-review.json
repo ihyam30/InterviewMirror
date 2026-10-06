@@ -1,0 +1,51 @@
+{
+  "measuredAtUtc": "2026-10-06T09:43:00Z",
+  "syntheticOnly": true,
+  "allPagesRenderedAndViewed": true,
+  "samples": [
+    {
+      "sampleMode": "ordinary-comprehensive",
+      "pageCount": 2,
+      "pageSize": "A4",
+      "fileBytes": 63592,
+      "textCharacters": 1858,
+      "pdfHeaderValid": true,
+      "chineseTextPresent": true,
+      "containsEvidenceSection": false,
+      "containsGapAnalysis": false,
+      "containsNextSteps": false,
+      "visualResult": "PASS",
+      "findings": []
+    },
+    {
+      "sampleMode": "long-comprehensive",
+      "pageCount": 4,
+      "pageSize": "A4",
+      "fileBytes": 91477,
+      "textCharacters": 5258,
+      "pdfHeaderValid": true,
+      "chineseTextPresent": true,
+      "containsEvidenceSection": false,
+      "containsGapAnalysis": false,
+      "containsNextSteps": false,
+      "visualResult": "PASS",
+      "findings": []
+    },
+    {
+      "sampleMode": "specialized",
+      "pageCount": 2,
+      "pageSize": "A4",
+      "fileBytes": 61684,
+      "textCharacters": 1578,
+      "pdfHeaderValid": true,
+      "chineseTextPresent": true,
+      "containsEvidenceSection": false,
+      "containsGapAnalysis": false,
+      "containsNextSteps": false,
+      "visualResult": "PASS",
+      "findings": []
+    }
+  ],
+  "overallResult": "PASS",
+  "note": "All PDF pages were rendered to a system temporary directory and visually inspected. PDF bodies and page images are not retained in the repository."
+}

@@ -1,0 +1,37 @@
+{
+  "measuredAtUtc": "2026-10-06T09:42:29.8019809+00:00",
+  "owner": "demo1",
+  "syntheticOnly": true,
+  "requiredRuns": 3,
+  "actualRuns": 3,
+  "allWithinTenMinutes": true,
+  "runs": [
+    {
+      "interviewId": "95ad397e-fff6-4ba8-833d-12645f7b3cef",
+      "mode": "COMPREHENSIVE",
+      "createdAtUtc": "2026-10-06T09:39:38.8429160+00:00",
+      "startedAtUtc": "2026-10-06 09:40:00.238207+00",
+      "completedAtUtc": "2026-10-06T09:40:55.0073700+00:00",
+      "endToEndMinutes": 1.27,
+      "tenMinuteGate": "PASS"
+    },
+    {
+      "interviewId": "84a04499-8cb7-4f8a-9ff5-cad3f7ae7cc2",
+      "mode": "QUESTION_BANK",
+      "createdAtUtc": "2026-10-06T09:36:46.6600820+00:00",
+      "startedAtUtc": "2026-10-06 09:36:46.818015+00",
+      "completedAtUtc": "2026-10-06T09:39:22.5860450+00:00",
+      "endToEndMinutes": 2.6,
+      "tenMinuteGate": "PASS"
+    },
+    {
+      "interviewId": "74e860ce-31f1-4e34-85dd-effac5acc0b9",
+      "mode": "COMPREHENSIVE",
+      "createdAtUtc": "2026-10-06T09:33:21.2251140+00:00",
+      "startedAtUtc": "2026-10-06 09:33:44.859689+00",
+      "completedAtUtc": "2026-10-06T09:36:19.7490640+00:00",
+      "endToEndMinutes": 2.98,
+      "tenMinuteGate": "PASS"
+    }
+  ]
+}

@@ -10,6 +10,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.StructuredOutputValidationAdvisor;
+import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -56,9 +58,10 @@ public class SpringAiInterviewModel implements InterviewModel {
                 + "\n<resume-json>\n" + resumeSnapshot + "\n</resume-json>\n<job-description>\n"
                 + safe(jdText) + "\n</job-description>\n每题返回 stem、category、rationale。";
         try {
-            PlanOutput output = planClient.prompt().system(system).user(user).call().entity(PlanOutput.class);
+            var response = planClient.prompt().system(system).user(user).call().responseEntity(PlanOutput.class);
+            PlanOutput output = response.entity();
             List<PlannedQuestion> questions = validatePlan(output, targetCount);
-            logCall("PLAN", started, questions.size());
+            logCall("PLAN", started, questions.size(), response.response());
             return questions;
         } catch (ApiException e) {
             throw e;
@@ -84,7 +87,8 @@ public class SpringAiInterviewModel implements InterviewModel {
                 + "\n候选人回答：\n" + safe(answer)
                 + "\n输出 shouldFollowUp、rationale、question；不追问时 question 为空字符串。";
         try {
-            FollowupOutput output = followupClient.prompt().system(system).user(user).call().entity(FollowupOutput.class);
+            var response = followupClient.prompt().system(system).user(user).call().responseEntity(FollowupOutput.class);
+            FollowupOutput output = response.entity();
             String normalizedQuestion = output == null ? "" : normalized(output.question());
             if (output == null || output.rationale() == null || output.rationale().isBlank()
                     || (output.shouldFollowUp() && (output.question() == null || output.question().isBlank()
@@ -94,7 +98,7 @@ public class SpringAiInterviewModel implements InterviewModel {
             }
             FollowupDecision result = new FollowupDecision(output.shouldFollowUp(), output.rationale(),
                     output.shouldFollowUp() ? output.question().trim() : "");
-            logCall("FOLLOW_UP", started, 1);
+            logCall("FOLLOW_UP", started, 1, response.response());
             return result;
         } catch (ApiException e) {
             throw e;
@@ -116,13 +120,14 @@ public class SpringAiInterviewModel implements InterviewModel {
                 + "\n简历(JSON)：" + resumeSnapshot + "\nJD：" + safe(jdText)
                 + "\n返回 stem、category、rationale。";
         try {
-            SingleQuestionOutput output = replacementClient.prompt().system(system).user(user).call().entity(SingleQuestionOutput.class);
+            var response = replacementClient.prompt().system(system).user(user).call().responseEntity(SingleQuestionOutput.class);
+            SingleQuestionOutput output = response.entity();
             String stem = output == null ? "" : safe(output.stem()).trim();
             if (stem.isBlank() || stem.length() > 1000 || alreadyUsedQuestions.stream()
                     .map(SpringAiInterviewModel::normalized).anyMatch(normalized(stem)::equals)) {
                 throw new IllegalArgumentException("replacement question failed domain validation");
             }
-            logCall("REPLACE", started, 1);
+            logCall("REPLACE", started, 1, response.response());
             return new PlannedQuestion(UUID.randomUUID().toString(), stem, safe(output.category()),
                     safe(output.rationale()), null);
         } catch (Exception e) {
@@ -151,11 +156,17 @@ public class SpringAiInterviewModel implements InterviewModel {
                 "尚未启用面试模型。请在本地配置模型服务并确认资料处理授权后重试。");
     }
 
-    private void logCall(String operation, long started, int outputCount) {
+    private void logCall(String operation, long started, int outputCount, ChatResponse response) {
         long elapsed = Math.max(0, (System.nanoTime() - started) / 1_000_000);
         log.info("interview_llm operation={} provider={} model={} promptVersion={} elapsedMs={} outputCount={}",
                 operation, provider, modelId, operation.equals("FOLLOW_UP") ? FOLLOWUP_PROMPT : PLAN_PROMPT,
                 elapsed, outputCount);
+        Usage usage = response == null || response.getMetadata() == null ? null : response.getMetadata().getUsage();
+        log.info("model_usage family=interview operation={} provider={} model={} promptVersion={} elapsedMs={} inputTokens={} outputTokens={} usageReported={}",
+                operation, provider, modelId, operation.equals("FOLLOW_UP") ? FOLLOWUP_PROMPT : PLAN_PROMPT,
+                elapsed, usage == null ? null : usage.getPromptTokens(),
+                usage == null ? null : usage.getCompletionTokens(),
+                usage != null && usage.getPromptTokens() != null && usage.getCompletionTokens() != null);
     }
 
     private static ApiException unavailable(String message) {

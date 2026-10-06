@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { currentUser, login, logout, refreshCsrf, ApiError, listReports, getReport,
+import { currentUser, login, logout, refreshCsrf, restoreSession, ApiError, listReports, getReport,
   getInterviewReportStatus, requestInterviewReport, retryInterviewReport, downloadReportPdf } from './api.js'
 import { cancelPendingReview } from './pending-review.js'
-import { canReviewDocument, canRetryDocument, canUseDocument, documentStatusLabel } from './document-state.js'
-import { answerInterview, createDocument, createInterview, endInterview, getInterview, getInterviewTurns,
+import { canReviewDocument, canRetryDocument, canUseDocument, documentStatusLabel, questionBankReviewCopy } from './document-state.js'
+import { answerInterview, createDocument, createInterview, createQuestionBank, endInterview, getInterview, getInterviewTurns,
   listInterviews, replaceInterviewQuestion, startInterview, updateDocument, validateInterviewSource } from './api.js'
 import { buildResumeContent, projectRowsForReview } from './document-content.js'
 
@@ -44,6 +44,43 @@ test('API errors carry status and server error code', async () => {
     assert.equal(error.code, 'RESOURCE_NOT_FOUND')
     return true
   })
+})
+
+test('restoring an authenticated session refreshes CSRF before write requests', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options })
+    if (url === '/api/v1/auth/csrf') return json({ data: { token: 'csrf-after-reload' } })
+    if (url === '/api/v1/auth/me') return json({ data: { username: 'demo1' } })
+    if (url === '/api/v1/auth/logout') return json({ data: null })
+    if (url === '/api/v1/question-banks/manual') return json({ data: { id: 'bank-1', status: 'PENDING' } })
+    throw new Error(`unexpected request ${url}`)
+  }
+
+  await logout()
+  calls.length = 0
+  assert.equal((await restoreSession()).username, 'demo1')
+  await createQuestionBank('Fresh after reload')
+
+  assert.deepEqual(calls.map(({ url }) => url), [
+    '/api/v1/auth/me',
+    '/api/v1/auth/csrf',
+    '/api/v1/question-banks/manual',
+  ])
+  const restoredCreateRequest = calls[2]
+  assert.equal(restoredCreateRequest.options.headers.get('X-XSRF-TOKEN'), 'csrf-after-reload')
+  assert.equal(restoredCreateRequest.options.credentials, 'include')
+
+  await logout()
+  calls.length = 0
+  await createQuestionBank('Write without prior restore')
+  assert.deepEqual(calls.map(({ url }) => url), [
+    '/api/v1/auth/csrf',
+    '/api/v1/question-banks/manual',
+  ])
+  const fallbackCreateRequest = calls[1]
+  assert.equal(fallbackCreateRequest.options.headers.get('X-XSRF-TOKEN'), 'csrf-after-reload')
+  assert.equal(fallbackCreateRequest.options.credentials, 'include')
 })
 
 test('pending review remains open when deleting its uploaded file fails', async () => {
@@ -88,6 +125,17 @@ test('document lifecycle labels and actions require the server confirmed flag', 
   assert.equal(canRetryDocument({ status: 'FAILED' }), true)
   assert.equal(canUseDocument({ status: 'PARSED', usableForInterview: false }), false)
   assert.equal(canUseDocument({ status: 'CONFIRMED', usableForInterview: true }), true)
+})
+
+test('question bank review copy distinguishes uploaded and manually created banks', () => {
+  assert.deepEqual(questionBankReviewCopy({ fileId: 'uploaded-file' }), {
+    description: '来源文件已完成本地解析。保存修改后需再次确认，才能用于面试。',
+    listTitle: '解析出的题目',
+  })
+  assert.deepEqual(questionBankReviewCopy({ fileId: null }), {
+    description: '这是手工创建的题库。保存修改后需确认，才能用于面试。',
+    listTitle: '题目列表',
+  })
 })
 
 test('document API sends multipart data and uses owner-confirmation gate endpoint', async () => {

@@ -1,0 +1,43 @@
+{
+  "measuredAtUtc": "2026-10-06T09:49:52.737Z",
+  "baseUrl": "http://127.0.0.1:18080",
+  "syntheticOnly": true,
+  "requestsPerGroup": 100,
+  "requestCount": 503,
+  "errorCount": 0,
+  "successCount": 503,
+  "errorRate": 0,
+  "groups": {
+    "resumes": {
+      "p50Ms": 6.8586,
+      "p95Ms": 16.82712,
+      "p99Ms": 34.1145990000002,
+      "maxMs": 71.6256
+    },
+    "questionBanks": {
+      "p50Ms": 7.0042,
+      "p95Ms": 15.306759999999999,
+      "p99Ms": 34.67650100000007,
+      "maxMs": 48.5663
+    },
+    "interviews": {
+      "p50Ms": 6.9965,
+      "p95Ms": 17.801919999999996,
+      "p99Ms": 42.550446000000065,
+      "maxMs": 53.9994
+    },
+    "reports": {
+      "p50Ms": 11.645050000000001,
+      "p95Ms": 22.79479,
+      "p99Ms": 48.01092200000004,
+      "maxMs": 56.5766
+    },
+    "me": {
+      "p50Ms": 4.5455000000000005,
+      "p95Ms": 11.198004999999997,
+      "p99Ms": 13.48421600000005,
+      "maxMs": 23.1581
+    }
+  },
+  "thresholdsPassed": true
+}
