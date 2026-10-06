@@ -40,6 +40,8 @@ MinIO 管理台凭证为 `.env` 中的 `MINIO_ROOT_USER` 和 `MINIO_ROOT_PASSWOR
 
 ## 当前能力和边界
 
+前端工程位于 `frontend/`：Vue 页面与 API 客户端在 `frontend/src/`，npm 清单、Vite 配置、Nginx 配置和前端镜像 Dockerfile 也都在该目录。Compose 从 `frontend/` 独立构建前端镜像。
+
 - 用户名或邮箱登录、当前用户、退出登录；服务端 Session Cookie（HttpOnly、SameSite=Strict）与 CSRF 校验。
 - `/api/v1/resources` 提供用户私有资源 CRUD；数据库查询、更新和删除均把认证用户 ID 放进 SQL 条件，跨账号不存在性统一返回 404。
 - `/api/v1/files` 提供用户私有文件上传、metadata、下载和删除；服务端仅接受 PDF、DOCX、TXT 和 Markdown，并校验扩展名、MIME 类型及 PDF/DOCX 文件签名；文件大小上限 20 MiB；API 不返回对象 key，私有桶不能匿名直连。
@@ -117,9 +119,9 @@ docker compose down --volumes --remove-orphans
 本机开发需要 Node.js 22、npm、Java 21、Maven 3.9+、Docker Desktop。
 
 ```powershell
-npm ci
-npm test
-npm run build
+npm ci --prefix frontend
+npm test --prefix frontend
+npm run build --prefix frontend
 mvn -B -f backend/pom.xml test
 docker compose config --quiet
 ```

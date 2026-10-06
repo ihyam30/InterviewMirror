@@ -4,10 +4,4 @@
 !.env.example
 node_modules
 dist
-backend
-frontend
-data
-docs
-scripts
-.github
 *.log

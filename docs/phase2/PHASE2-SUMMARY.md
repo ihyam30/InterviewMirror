@@ -44,8 +44,8 @@ Q05 阶段 0 双栏题库本轮 3/3 命中。Q11 表格以 HTML 输出，新增 
 ```powershell
 docker compose config --quiet
 docker compose up --build -d
-npm test
-npm run build
+npm test --prefix frontend
+npm run build --prefix frontend
 docker run --rm -v interviewmirror-stage2-maven-cache:/stage2m2 -v "${PWD}/backend:/workspace" -w /workspace interviewmirror-stage2-build sh -lc 'mvn -Dmaven.repo.local=/stage2m2 -o -B test'
 scripts\poc\.mineru\Scripts\python.exe scripts\phase2\verify_eval_dataset.py
 pwsh -File .\scripts\phase2\run-evaluation.ps1 -PerDocumentTimeout 600

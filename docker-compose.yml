@@ -89,7 +89,7 @@ services:
 
   frontend:
     build:
-      context: .
+      context: ./frontend
       dockerfile: Dockerfile
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-5173}:80"

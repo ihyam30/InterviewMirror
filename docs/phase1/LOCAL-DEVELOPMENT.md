@@ -2,7 +2,7 @@
 
 ## 组件结构
 
-- `src/`：保留 Vue 3 + Vite 产品交互；`src/api.js` 统一请求、Session Cookie、CSRF、错误和认证失效处理。
+- `frontend/src/`：保留 Vue 3 + Vite 产品交互；`frontend/src/api.js` 统一请求、Session Cookie、CSRF、错误和认证失效处理。npm 清单、Vite 配置、Nginx 配置和前端 Dockerfile 同在 `frontend/`。
 - `backend/`：Java 21 / Spring Boot 分层应用：Controller → Service → Repository。SQL 使用 JdbcTemplate，迁移由 Flyway 托管。
 - `postgres`：保存用户、通用演示资源和文件元数据。
 - `minio`：保存原始文件；私有桶在后端启动时确保创建。只有后端容器拿到 S3 凭证。
@@ -46,9 +46,9 @@ docker compose ps
 ## 本地开发和验收
 
 ```powershell
-npm ci
-npm test
-npm run build
+npm ci --prefix frontend
+npm test --prefix frontend
+npm run build --prefix frontend
 mvn -B -f backend/pom.xml test
 ```
 
