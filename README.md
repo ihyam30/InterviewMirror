@@ -297,3 +297,9 @@ docker compose config --quiet
 - 用户资料通过服务端 Session 认证，并在后端按 owner 隔离；MinIO bucket 不公开。
 - 开启模型服务前请确认供应商、模型和资料处理范围；传输内容受对应供应商的数据策略约束。
 - 当前 Compose 仅绑定 loopback，项目没有完成公网生产部署与生产级账号管理验收。
+
+## 许可证
+
+InterviewMirror 项目自有源代码和文档采用 [Apache License 2.0](LICENSE)。第三方依赖、MinIO、MinerU、模型/字体及外部服务均按各自条款管理，不会因本项目许可证而改变。Compose 当前包含单独许可的 MinIO Server，仅用于本地演示；完整发布边界和待办审查见 [`docs/OPEN_SOURCE_RELEASE_CHECKLIST.md`](docs/OPEN_SOURCE_RELEASE_CHECKLIST.md)。
+
+演示账号、示例密码和 `.env.example` 中的本地默认值只供绑定回环地址的个人演示。不要把这些值用于共享环境或公网部署。
