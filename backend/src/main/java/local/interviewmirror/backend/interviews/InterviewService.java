@@ -33,6 +33,7 @@ public class InterviewService {
     private static final int MAX_REPLACEMENTS_PER_MAIN = 3;
     private final InterviewRepository repository;
     private final DocumentService documents;
+    private final local.interviewmirror.backend.resumes.ResumeService resumes;
     private final InterviewModeValidator validator;
     private final InterviewModel model;
     private final InterviewGraphRuntime graph;
@@ -40,13 +41,14 @@ public class InterviewService {
 
     public InterviewService(InterviewRepository repository, DocumentService documents,
             InterviewModeValidator validator, InterviewModel model, InterviewGraphRuntime graph,
-            ObjectMapper json) {
+            ObjectMapper json, local.interviewmirror.backend.resumes.ResumeService resumes) {
         this.repository = repository;
         this.documents = documents;
         this.validator = validator;
         this.model = model;
         this.graph = graph;
         this.json = json;
+        this.resumes = resumes;
     }
 
     public InterviewViews.Interview create(UUID ownerId, InterviewRequests.Create request) {
@@ -66,11 +68,12 @@ public class InterviewService {
         ObjectNode snapshot = json.createObjectNode();
         String title;
         if (request.mode() == InterviewMode.COMPREHENSIVE) {
-            ManagedDocumentView resume = documents.requireUsableForInterview(ownerId, DocumentType.RESUME, request.resumeId());
+            var resume = resumes.usable(ownerId, request.resumeId());
             ObjectNode resumeSnapshot = snapshot.putObject("resume");
             resumeSnapshot.put("id", resume.id().toString());
             resumeSnapshot.put("title", resume.title());
-            resumeSnapshot.set("content", resume.content());
+            // The whole extracted text is the source; structured preview fields may omit content.
+            resumeSnapshot.set("content", json.createObjectNode().put("resumeText", resume.resumeText()));
             snapshot.put("jdText", request.jdText() == null ? "" : request.jdText().trim());
             title = request.jdText() == null || request.jdText().isBlank() ? resume.title() : request.jdText().trim().substring(0, Math.min(80, request.jdText().trim().length()));
         } else {

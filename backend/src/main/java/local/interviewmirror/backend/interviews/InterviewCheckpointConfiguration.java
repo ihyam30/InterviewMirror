@@ -19,10 +19,8 @@ import org.springframework.context.annotation.Configuration;
 public class InterviewCheckpointConfiguration {
 
     @Bean
-    PostgresSaver interviewPostgresSaver(DataSource dataSource) throws SQLException {
-        return PostgresSaver.builder().datasource(dataSource)
-                .stateSerializer(new ObjectStreamStateSerializer<>(AgentState::new))
-                .createTables(true).build();
+    PostgresSaver interviewPostgresSaver(DataSource dataSource, org.springframework.transaction.PlatformTransactionManager transactions) throws SQLException {
+        return new ResumeAwarePostgresSaver(dataSource, transactions);
     }
 
     @Bean
@@ -137,8 +135,8 @@ public class InterviewCheckpointConfiguration {
     }
 
     @Bean
-    InterviewGraphRuntime interviewGraphRuntime(CompiledGraph<AgentState> interviewGraph) {
-        return new LangGraph4jInterviewGraph(interviewGraph);
+    InterviewGraphRuntime interviewGraphRuntime(CompiledGraph<AgentState> interviewGraph, PostgresSaver saver) {
+        return new LangGraph4jInterviewGraph(interviewGraph, saver);
     }
 
     private static <T> T value(AgentState state, String key, T fallback) {

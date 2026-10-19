@@ -1,5 +1,6 @@
 server:
   port: ${SERVER_PORT:8080}
+  forward-headers-strategy: native
   servlet:
     session:
       cookie:
@@ -16,6 +17,13 @@ spring:
     password: ${DATABASE_PASSWORD:local-dev-only-change-me}
     hikari:
       maximum-pool-size: 10
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:123456}
+      timeout: 3s
+      connect-timeout: 3s
   ai:
     model:
       chat: openai
@@ -46,10 +54,26 @@ management:
       show-details: never
 
 interviewmirror:
+  resume:
+    worker-enabled: ${RESUME_WORKER_ENABLED:true}
+    structured-content-enabled: ${RESUME_STRUCTURED_CONTENT_ENABLED:false}
+    allowed-extensions: ${RESUME_ALLOWED_EXTENSIONS:pdf,doc,docx,txt}
+    parse-timeout: ${RESUME_PARSE_TIMEOUT:PT2M}
+    text-limit: ${RESUME_TEXT_LIMIT:100000}
+    page-limit: ${RESUME_PAGE_LIMIT:50}
+    parse-concurrency: ${RESUME_PARSE_CONCURRENCY:2}
+    ocr-languages: ${RESUME_OCR_LANGUAGES:chi_sim+eng}
+    tesseract-path: ${TESSERACT_PATH:}
+    model-timeout: ${RESUME_MODEL_TIMEOUT:PT180S}
+    pending-timeout: ${RESUME_PENDING_TIMEOUT:PT10M}
+    processing-timeout: ${RESUME_PROCESSING_TIMEOUT:PT15M}
+    global-rate: ${RESUME_UPLOAD_GLOBAL_RATE:60}
+    ip-rate: ${RESUME_UPLOAD_IP_RATE:5}
+    user-rate: ${RESUME_UPLOAD_USER_RATE:5}
   storage:
     endpoint: ${S3_ENDPOINT:http://localhost:9000}
-    access-key: ${S3_ACCESS_KEY:local-dev-access}
-    secret-key: ${S3_SECRET_KEY:local-dev-secret-change-me}
+    access-key: ${S3_ACCESS_KEY:interviewmirror-local}
+    secret-key: ${S3_SECRET_KEY:local-only-change-this-storage-password}
     bucket: ${S3_BUCKET:interviewmirror-private}
   mineru:
     worker-url: ${MINERU_WORKER_URL:http://host.docker.internal:8765}
@@ -62,7 +86,7 @@ interviewmirror:
   graph:
     enabled: ${LANGGRAPH4J_ENABLED:true}
   model:
-    enabled: ${INTERVIEW_MODEL_ENABLED:false}
+    enabled: ${INTERVIEW_MODEL_ENABLED:true}
     provider: ${INTERVIEW_MODEL_PROVIDER:QWEN}
     id: ${INTERVIEW_MODEL_ID:qwen-plus-2025-12-01}
   report:

@@ -12,6 +12,7 @@ public interface InterviewGraphRuntime {
             List<InterviewModel.PlannedQuestion> replacementPlan) throws Exception;
     GraphSnapshot end(UUID interviewId) throws Exception;
     GraphSnapshot snapshot(UUID interviewId);
+    default void delete(UUID interviewId) throws Exception {}
 
     record GraphSnapshot(String phase, String completionReason, int mainQuestionIndex, int followupCount,
             int replaceCount, String currentTurnType, String currentQuestionId, String sourceQuestionId,

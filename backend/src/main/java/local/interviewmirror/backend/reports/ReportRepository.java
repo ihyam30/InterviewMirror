@@ -33,7 +33,7 @@ public class ReportRepository {
                   ORDER BY i.completed_at ASC NULLS LAST,i.created_at ASC,i.id ASC
                 ) AS interview_ordinal
               FROM interviews i JOIN app_users u ON u.id=i.owner_id
-              WHERE i.owner_id=? AND i.status='COMPLETE'
+              WHERE i.owner_id=? AND i.status='COMPLETE' AND i.delete_requested=FALSE
             )
             """;
     private final JdbcTemplate jdbc;
@@ -57,7 +57,7 @@ public class ReportRepository {
     public ReportSource loadSource(UUID ownerId, UUID interviewId) {
         List<ReportSource> sources = jdbc.query("""
                 SELECT id,owner_id,mode,status,title,completion_reason,model_provider,model_id,jd_text,source_snapshot,completed_at
-                FROM interviews WHERE id=? AND owner_id=?
+                FROM interviews WHERE id=? AND owner_id=? AND delete_requested=FALSE
                 """, (rs, row) -> new ReportSource(rs.getObject("id", UUID.class), rs.getObject("owner_id", UUID.class),
                 rs.getString("mode"), rs.getString("status"), rs.getString("title"), rs.getString("completion_reason"),
                 rs.getString("model_provider"), rs.getString("model_id"), rs.getString("jd_text"),
@@ -187,7 +187,7 @@ public class ReportRepository {
                 this::mapReport, interviewId, ownerId).stream().findFirst();
     }
     public Optional<ReportRow> findReport(UUID ownerId, UUID reportId) {
-        return jdbc.query("SELECT * FROM interview_reports WHERE id=? AND owner_id=?",
+        return jdbc.query("SELECT * FROM interview_reports r WHERE id=? AND owner_id=? AND EXISTS (SELECT 1 FROM interviews i WHERE i.id=r.interview_id AND i.delete_requested=FALSE)",
                 this::mapReport, reportId, ownerId).stream().findFirst();
     }
     public List<ReportRow> listReports(UUID ownerId) {
@@ -258,9 +258,26 @@ public class ReportRepository {
     }
     @Transactional
     public void savePdf(UUID ownerId, UUID reportId, String key, String sha, long size, String sourceSha) {
+        lockReportInterview(ownerId, reportId);
         jdbc.update("DELETE FROM report_pdf_artifacts WHERE report_id=? AND owner_id=?", reportId, ownerId);
         jdbc.update("INSERT INTO report_pdf_artifacts(id,report_id,owner_id,object_key,sha256,size_bytes,source_sha256) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 UUID.randomUUID(), reportId, ownerId, key, sha, size, sourceSha);
+        jdbc.update("DELETE FROM resume_object_cleanup WHERE object_key=?", key);
+    }
+
+    @Transactional
+    public void reservePdfWrite(UUID ownerId, UUID reportId, String key) {
+        lockReportInterview(ownerId, reportId);
+        if (jdbc.queryForObject("SELECT COUNT(*) FROM resume_object_cleanup WHERE object_key=?", Long.class, key) == 0) {
+            UUID resumeId = jdbc.queryForObject("SELECT i.resume_id FROM interviews i JOIN interview_reports r ON r.interview_id=i.id WHERE r.id=? AND r.owner_id=?", UUID.class, reportId, ownerId);
+            jdbc.update("INSERT INTO resume_object_cleanup(id,resume_id,object_key,cleanup_kind,available_at) VALUES (?,?,?,'COMPENSATION',?)",
+                    UUID.randomUUID(), resumeId, key, Timestamp.from(Instant.now().plusSeconds(600)));
+        }
+    }
+    private void lockReportInterview(UUID ownerId, UUID reportId) {
+        var interviews = jdbc.query("SELECT i.id FROM interviews i WHERE i.owner_id=? AND i.delete_requested=FALSE AND EXISTS (SELECT 1 FROM interview_reports r WHERE r.id=? AND r.interview_id=i.id AND r.owner_id=i.owner_id) FOR UPDATE",
+                (rs, n) -> rs.getObject(1, UUID.class), ownerId, reportId);
+        if (interviews.isEmpty()) throw notFound();
     }
 
     public List<ReportTask> staleCompleteInterviewsWithoutTask() {
@@ -269,7 +286,7 @@ public class ReportRepository {
                   0 AS retry_count,0 AS attempt_count,NULL AS error_code,NULL AS error_message,i.completed_at AS queued_at,
                   NULL AS started_at,NULL AS completed_at,NULL AS duration_ms,NULL AS worker_id,NULL AS lease_until
                 FROM interviews i LEFT JOIN report_tasks t ON t.interview_id=i.id AND t.owner_id=i.owner_id AND t.task_type='REPORT'
-                WHERE i.status='COMPLETE' AND t.id IS NULL ORDER BY i.completed_at LIMIT 50
+                WHERE i.status='COMPLETE' AND i.delete_requested=FALSE AND t.id IS NULL ORDER BY i.completed_at LIMIT 50
                 """, this::mapSyntheticTask);
     }
     public void enqueueRecoveredInterviews(List<ReportTask> rows) {
@@ -281,6 +298,9 @@ public class ReportRepository {
     }
 
     private void verifyClaim(ReportTask task) {
+        var active = jdbc.query("SELECT id FROM interviews WHERE id=? AND owner_id=? AND delete_requested=FALSE FOR UPDATE",
+                (rs, n) -> rs.getObject(1, UUID.class), task.interviewId(), task.ownerId());
+        if (active.isEmpty()) throw notFound();
         Integer count = jdbc.queryForObject("SELECT COUNT(*) FROM report_tasks WHERE id=? AND owner_id=? AND status='PROCESSING' AND worker_id=? AND attempt_count=?",
                 Integer.class, task.id(), task.ownerId(), task.workerId(), task.attemptCount());
         if (count == null || count != 1) throw new IllegalStateException("Report task claim is stale");

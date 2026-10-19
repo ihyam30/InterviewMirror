@@ -16,7 +16,10 @@ public class StorageConfiguration {
     MinioClient minioClient(@Value("${interviewmirror.storage.endpoint}") String endpoint,
                             @Value("${interviewmirror.storage.access-key}") String accessKey,
                             @Value("${interviewmirror.storage.secret-key}") String secretKey) {
-        return MinioClient.builder().endpoint(endpoint).credentials(accessKey, secretKey).build();
+        var http = new okhttp3.OkHttpClient.Builder().connectTimeout(java.time.Duration.ofSeconds(5))
+                .readTimeout(java.time.Duration.ofMinutes(2)).writeTimeout(java.time.Duration.ofMinutes(2))
+                .callTimeout(java.time.Duration.ofMinutes(2)).build();
+        return MinioClient.builder().endpoint(endpoint).credentials(accessKey, secretKey).httpClient(http).build();
     }
 
     @Bean

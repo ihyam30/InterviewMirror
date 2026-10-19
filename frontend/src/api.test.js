@@ -7,6 +7,7 @@ import { canReviewDocument, canRetryDocument, canUseDocument, documentStatusLabe
 import { answerInterview, createDocument, createInterview, createQuestionBank, endInterview, getInterview, getInterviewTurns,
   listInterviews, replaceInterviewQuestion, startInterview, updateDocument, validateInterviewSource } from './api.js'
 import { buildResumeContent, projectRowsForReview } from './document-content.js'
+import { listResumePage, getDocument, retryDocument } from './api.js'
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -138,7 +139,7 @@ test('question bank review copy distinguishes uploaded and manually created bank
   })
 })
 
-test('document API sends multipart data and uses owner-confirmation gate endpoint', async () => {
+test('resume upload uses the independent endpoint and question banks retain editing', async () => {
   const calls = []
   globalThis.fetch = async (url, options) => {
     calls.push({ url, options })
@@ -149,11 +150,31 @@ test('document API sends multipart data and uses owner-confirmation gate endpoin
     title: 'Bank', contentVersion: 2, content: { schemaVersion: 'v1', questions: [] },
   })
   await validateInterviewSource('RESUME', 'resume-1')
-  assert.equal(calls[0].url, '/api/v1/resumes')
+  assert.equal(calls[0].url, '/api/v1/resumes/upload')
   assert.ok(calls[0].options.body instanceof FormData)
   assert.equal(calls[1].url, '/api/v1/question-banks/bank-1')
   assert.equal(JSON.parse(calls[1].options.body).contentVersion, 2)
   assert.equal(calls[2].url, '/api/v1/interview-sources/resumes/resume-1')
+})
+
+test('resume pagination and detail history retain their independent API contract', async () => {
+  const calls = []
+  globalThis.fetch = async (url, options) => {
+    calls.push({ url, options })
+    if (url.includes('/detail')) return json({ data: { resume: { id: 'r1', usableForInterview: true }, analyses: { items: [{ id: 'a1' }], total: 1 }, interviews: { items: [], total: 0 } } })
+    if (url.includes('/reanalyze')) return json({ data: { id: 'r1', analyzeStatus: 'PENDING' } })
+    return json({ data: { items: [{ id: 'r1' }], total: 41, page: 2, size: 20 } })
+  }
+  assert.equal((await listResumePage(2, true)).total, 41)
+  const detail = await getDocument('RESUME', 'r1')
+  assert.equal(detail.usableForInterview, true)
+  assert.equal(detail.analyses.items[0].id, 'a1')
+  assert.equal((await retryDocument('RESUME', 'r1')).analyzeStatus, 'PENDING')
+  assert.deepEqual(calls.map(call => call.url), [
+    '/api/v1/resumes?page=2&size=20&usableOnly=true',
+    '/api/v1/resumes/r1/detail?analysisPage=0&interviewPage=0&size=20',
+    '/api/v1/resumes/r1/reanalyze',
+  ])
 })
 
 test('interview API uses authenticated JSON requests for lifecycle and idempotent answers', async () => {

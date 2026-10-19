@@ -24,44 +24,6 @@ public class DocumentController {
 
     public DocumentController(DocumentService documents) { this.documents = documents; }
 
-    @GetMapping("/api/v1/resumes")
-    ApiResponse<List<ManagedDocumentView>> listResumes(Authentication auth,
-            @RequestParam(defaultValue = "false") boolean usableOnly) {
-        return ApiResponse.of(documents.list(userId(auth), DocumentType.RESUME, usableOnly));
-    }
-
-    @PostMapping(path = "/api/v1/resumes", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    ApiResponse<ManagedDocumentView> uploadResume(Authentication auth, @RequestParam("file") MultipartFile file) {
-        return ApiResponse.of(documents.createUpload(userId(auth), DocumentType.RESUME, file));
-    }
-
-    @GetMapping("/api/v1/resumes/{id}")
-    ApiResponse<ManagedDocumentView> getResume(Authentication auth, @PathVariable UUID id) {
-        return ApiResponse.of(documents.get(userId(auth), DocumentType.RESUME, id));
-    }
-
-    @PutMapping("/api/v1/resumes/{id}")
-    ApiResponse<ManagedDocumentView> updateResume(Authentication auth, @PathVariable UUID id,
-            @Valid @RequestBody DocumentRequests.Update body) {
-        return ApiResponse.of(documents.save(userId(auth), DocumentType.RESUME, id, body.contentVersion(), body.title(), body.content()));
-    }
-
-    @PostMapping("/api/v1/resumes/{id}/confirm")
-    ApiResponse<ManagedDocumentView> confirmResume(Authentication auth, @PathVariable UUID id) {
-        return ApiResponse.of(documents.confirm(userId(auth), DocumentType.RESUME, id));
-    }
-
-    @PostMapping("/api/v1/resumes/{id}/retry")
-    ApiResponse<ManagedDocumentView> retryResume(Authentication auth, @PathVariable UUID id) {
-        return ApiResponse.of(documents.retry(userId(auth), DocumentType.RESUME, id));
-    }
-
-    @DeleteMapping("/api/v1/resumes/{id}")
-    ApiResponse<Void> deleteResume(Authentication auth, @PathVariable UUID id) {
-        documents.delete(userId(auth), DocumentType.RESUME, id);
-        return ApiResponse.of(null);
-    }
-
     @GetMapping("/api/v1/question-banks")
     ApiResponse<List<ManagedDocumentView>> listQuestionBanks(Authentication auth,
             @RequestParam(defaultValue = "false") boolean usableOnly) {
@@ -109,11 +71,6 @@ public class DocumentController {
     @GetMapping("/api/v1/parse-tasks/{id}")
     ApiResponse<ParseTaskView> getTask(Authentication auth, @PathVariable UUID id) {
         return ApiResponse.of(documents.getTask(userId(auth), id));
-    }
-
-    @GetMapping("/api/v1/interview-sources/resumes/{id}")
-    ApiResponse<ManagedDocumentView> resumeInterviewSource(Authentication auth, @PathVariable UUID id) {
-        return ApiResponse.of(documents.requireUsableForInterview(userId(auth), DocumentType.RESUME, id));
     }
 
     @GetMapping("/api/v1/interview-sources/question-banks/{id}")

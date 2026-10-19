@@ -37,6 +37,7 @@ const PROJECT_FIELD_TITLES = new Set([
 ].map(comparisonKey))
 
 export function resumeViewModel(content = {}, fallbackName = '我的简历') {
+  const structuredContentDisabled = content?.schemaVersion === 'interviewmirror.resume-content.disabled.v1'
   const info = content?.personalInfo && typeof content.personalInfo === 'object' ? content.personalInfo : {}
   const education = (Array.isArray(content?.education) ? content.education : []).map((item) => {
     const title = asText(item?.institution || item?.details) || asText(item)
@@ -85,6 +86,7 @@ export function resumeViewModel(content = {}, fallbackName = '我的简历') {
     name: asText(info.name) || fallbackName || '我的简历',
     contact: [info.phone, info.email, info.location].map(asText).filter(Boolean),
     role: asText(info.targetRole || info.role || info.position),
+    structuredContentDisabled,
     sections,
     previewSections: sections.slice(0, 4).map((section) => ({
       title: section.title,

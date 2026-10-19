@@ -16,6 +16,8 @@ server:
       cookie:
         secure: false
 interviewmirror:
+  resume:
+    worker-enabled: false
   graph:
     enabled: false
   mineru:

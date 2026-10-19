@@ -1,6 +1,29 @@
 name: interviewmirror-local
 
 services:
+  redis:
+    image: redis:7.4-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-}
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "$$REDIS_PASSWORD" ]; then
+          exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
+        else
+          exec redis-server --appendonly yes
+        fi
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
   postgres:
     image: postgres:17.6-alpine
     environment:
@@ -51,6 +74,22 @@ services:
       DATABASE_USER: ${DATABASE_USER:-interviewmirror}
       DATABASE_PASSWORD: ${DATABASE_PASSWORD:-local-only-change-this-db-password}
       S3_ENDPOINT: http://minio:9000
+      REDIS_HOST: redis
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      RESUME_WORKER_ENABLED: ${RESUME_WORKER_ENABLED:-true}
+      RESUME_STRUCTURED_CONTENT_ENABLED: ${RESUME_STRUCTURED_CONTENT_ENABLED:-false}
+      RESUME_OCR_LANGUAGES: ${RESUME_OCR_LANGUAGES:-chi_sim+eng}
+      RESUME_ALLOWED_EXTENSIONS: ${RESUME_ALLOWED_EXTENSIONS:-pdf,doc,docx,txt}
+      RESUME_PARSE_TIMEOUT: ${RESUME_PARSE_TIMEOUT:-PT2M}
+      RESUME_PARSE_CONCURRENCY: ${RESUME_PARSE_CONCURRENCY:-2}
+      RESUME_TEXT_LIMIT: ${RESUME_TEXT_LIMIT:-100000}
+      RESUME_PAGE_LIMIT: ${RESUME_PAGE_LIMIT:-50}
+      RESUME_MODEL_TIMEOUT: ${RESUME_MODEL_TIMEOUT:-PT180S}
+      RESUME_PENDING_TIMEOUT: ${RESUME_PENDING_TIMEOUT:-PT10M}
+      RESUME_PROCESSING_TIMEOUT: ${RESUME_PROCESSING_TIMEOUT:-PT15M}
+      RESUME_UPLOAD_GLOBAL_RATE: ${RESUME_UPLOAD_GLOBAL_RATE:-60}
+      RESUME_UPLOAD_IP_RATE: ${RESUME_UPLOAD_IP_RATE:-5}
+      RESUME_UPLOAD_USER_RATE: ${RESUME_UPLOAD_USER_RATE:-5}
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:-interviewmirror-local}
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-local-only-change-this-storage-password}
       S3_BUCKET: ${S3_BUCKET:-interviewmirror-private}
@@ -75,6 +114,8 @@ services:
     ports:
       - "127.0.0.1:${BACKEND_PORT:-8080}:8080"
     depends_on:
+      redis:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       minio:
@@ -104,5 +145,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  redis-data:
   postgres-data:
   minio-data:

@@ -25,7 +25,15 @@ final class EvidenceCatalog {
         String jd = source.sourceSnapshot().path("jdText").asString(source.jdText() == null ? "" : source.jdText());
         addText("JD", "jd-" + source.interviewId(), "jd", jd);
         JsonNode resume = source.sourceSnapshot().path("resume");
-        if (resume.isObject()) collectStrings(resume.path("content"), "RESUME",
+        if (resume.path("content").path("resumeText").isTextual()) {
+            String text = resume.path("content").path("resumeText").asString();
+            // New resume snapshots contain the complete canonical text. Do not truncate it
+            // against the legacy structured-field catalog's shared 250-entry limit.
+            for (int start = 0; start < text.length(); start += 400) {
+                String quote = text.substring(start, Math.min(text.length(), start + 480)).trim();
+                if (!quote.isBlank()) add("RESUME", resume.path("id").asString("resume"), "resume/resumeText:" + start, quote);
+            }
+        } else if (resume.isObject()) collectStrings(resume.path("content"), "RESUME",
                 resume.path("id").asString("resume"), "resume", 0);
     }
 

@@ -42,6 +42,11 @@ public class InterviewRepository {
     public InterviewRecord create(UUID id, UUID ownerId, InterviewRequests.Create request,
             String requestFingerprint, String title, JsonNode sourceSnapshot,
             String modelProvider, String modelId, Instant consentAt) {
+        if (request.mode() == InterviewMode.COMPREHENSIVE) {
+            var active = jdbc.query("SELECT id FROM resumes WHERE id=? AND user_id=? AND delete_status='ACTIVE' AND length(trim(resume_text))>0 FOR UPDATE",
+                    (rs, n) -> rs.getObject(1, UUID.class), request.resumeId(), ownerId);
+            if (active.isEmpty()) throw notFound();
+        }
         try {
             jdbc.update("""
                     INSERT INTO interviews(id, owner_id, mode, status, client_request_id, request_fingerprint,
@@ -64,17 +69,17 @@ public class InterviewRepository {
     }
 
     public Optional<InterviewRecord> findByRequest(UUID ownerId, String requestId) {
-        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE owner_id=? AND client_request_id=?",
+        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE owner_id=? AND client_request_id=? AND delete_requested=FALSE",
                 INTERVIEW_MAPPER, ownerId, requestId).stream().findFirst();
     }
 
     public InterviewRecord findOwned(UUID ownerId, UUID id) {
-        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE id=? AND owner_id=?",
+        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE id=? AND owner_id=? AND delete_requested=FALSE",
                 INTERVIEW_MAPPER, id, ownerId).stream().findFirst().orElseThrow(InterviewRepository::notFound);
     }
 
     public List<InterviewRecord> listOwned(UUID ownerId) {
-        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE owner_id=? ORDER BY created_at DESC",
+        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE owner_id=? AND delete_requested=FALSE ORDER BY created_at DESC",
                 INTERVIEW_MAPPER, ownerId);
     }
 
@@ -91,14 +96,14 @@ public class InterviewRepository {
     @Transactional
     public boolean claimPreparation(UUID ownerId, UUID id) {
         return jdbc.update("UPDATE interviews SET status='PREPARING', last_error_code=NULL, updated_at=CURRENT_TIMESTAMP, "
-                        + "state_version=state_version+1 WHERE id=? AND owner_id=? AND status IN ('CREATED','START_FAILED')",
+                        + "state_version=state_version+1 WHERE id=? AND owner_id=? AND delete_requested=FALSE AND status IN ('CREATED','START_FAILED')",
                 id, ownerId) == 1;
     }
 
     @Transactional
     public void saveQuestionPlan(UUID ownerId, UUID id, JsonNode plan) {
         if (jdbc.update("UPDATE interviews SET question_plan=?, updated_at=CURRENT_TIMESTAMP, state_version=state_version+1 "
-                + "WHERE id=? AND owner_id=? AND status='PREPARING'", write(plan), id, ownerId) != 1) {
+                + "WHERE id=? AND owner_id=? AND delete_requested=FALSE AND status='PREPARING'", write(plan), id, ownerId) != 1) {
             throw conflict("INTERVIEW_NOT_PREPARING", "当前面试状态不能保存问题计划。");
         }
     }
@@ -181,7 +186,7 @@ public class InterviewRepository {
     @Transactional
     public boolean claimTransition(UUID ownerId, UUID interviewId, UUID turnId) {
         return jdbc.update("UPDATE interviews SET transition_state='PROCESSING', updated_at=CURRENT_TIMESTAMP "
-                + "WHERE id=? AND owner_id=? AND status='RUNNING' AND transition_turn_id=? AND transition_state='PENDING'",
+                + "WHERE id=? AND owner_id=? AND delete_requested=FALSE AND status='RUNNING' AND transition_turn_id=? AND transition_state='PENDING'",
                 interviewId, ownerId, turnId) == 1;
     }
 
@@ -368,7 +373,7 @@ public class InterviewRepository {
     }
 
     public List<InterviewRecord> staleCompletingInterviews(Instant before) {
-        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE status='COMPLETING' AND updated_at < ? ORDER BY updated_at",
+        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE delete_requested=FALSE AND status='COMPLETING' AND updated_at < ? ORDER BY updated_at",
                 INTERVIEW_MAPPER, Timestamp.from(before));
     }
 
@@ -378,7 +383,7 @@ public class InterviewRepository {
     }
 
     public List<InterviewRecord> pendingTransitions() {
-        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE transition_state='PENDING' ORDER BY updated_at",
+        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE delete_requested=FALSE AND transition_state='PENDING' ORDER BY updated_at",
                 INTERVIEW_MAPPER);
     }
 
@@ -415,7 +420,7 @@ public class InterviewRepository {
     }
 
     private InterviewRecord lockOwned(UUID ownerId, UUID id) {
-        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE id=? AND owner_id=? FOR UPDATE",
+        return jdbc.query("SELECT " + COLUMNS + " FROM interviews WHERE id=? AND owner_id=? AND delete_requested=FALSE FOR UPDATE",
                 INTERVIEW_MAPPER, id, ownerId).stream().findFirst().orElseThrow(InterviewRepository::notFound);
     }
 

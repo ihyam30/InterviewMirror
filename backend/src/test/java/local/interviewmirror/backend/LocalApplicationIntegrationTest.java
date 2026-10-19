@@ -65,6 +65,8 @@ class LocalApplicationIntegrationTest {
     @Autowired InterviewService interviewService;
     @Autowired InterviewRepository interviewRepository;
     @Autowired ReportService reportService;
+    @Autowired local.interviewmirror.backend.resumes.ResumeRepository resumes;
+    @org.springframework.test.context.bean.override.mockito.MockitoBean local.interviewmirror.backend.resumes.ResumeUploadLimiter resumeLimiter;
 
     @BeforeEach
     void seedAccounts() {
@@ -72,6 +74,8 @@ class LocalApplicationIntegrationTest {
         jdbc.update("DELETE FROM managed_documents");
         jdbc.update("DELETE FROM demo_resources");
         jdbc.update("DELETE FROM stored_files");
+        jdbc.update("DELETE FROM resumes");
+        jdbc.update("DELETE FROM resume_object_cleanup");
         jdbc.update("DELETE FROM app_users");
         storage.clear();
         parser.clearFailures();
@@ -87,8 +91,6 @@ class LocalApplicationIntegrationTest {
         JsonNode uploaded = uploadDocument("/api/v1/resumes", "interview-resume.pdf", "application/pdf", a);
         UUID resumeId = UUID.fromString(uploaded.path("id").asText());
         parseWorker.processOne();
-        mvc.perform(post("/api/v1/resumes/" + resumeId + "/confirm").session(a.session())
-                .cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf())).andExpect(status().isOk());
 
         String invalidConsent = "{\"schemaVersion\":\"1.1.0\",\"clientRequestId\":\"consent-missing\",\"mode\":\"COMPREHENSIVE\",\"resumeId\":\"" + resumeId + "\",\"locale\":\"zh-CN\",\"modelDataConsent\":false}";
         mvc.perform(post("/api/v1/interviews").session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf())
@@ -205,8 +207,6 @@ class LocalApplicationIntegrationTest {
         JsonNode uploaded = uploadDocument("/api/v1/resumes", "recovery-resume.pdf", "application/pdf", a);
         UUID resumeId = UUID.fromString(uploaded.path("id").asText());
         parseWorker.processOne();
-        mvc.perform(post("/api/v1/resumes/" + resumeId + "/confirm").session(a.session())
-                .cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf())).andExpect(status().isOk());
         String create = "{\"schemaVersion\":\"1.1.0\",\"clientRequestId\":\"completion-recovery-create\","
                 + "\"mode\":\"COMPREHENSIVE\",\"resumeId\":\"" + resumeId
                 + "\",\"locale\":\"zh-CN\",\"modelDataConsent\":true}";
@@ -240,8 +240,6 @@ class LocalApplicationIntegrationTest {
         JsonNode uploaded = uploadDocument("/api/v1/resumes", "report-gap-resume.pdf", "application/pdf", a);
         UUID resumeId = UUID.fromString(uploaded.path("id").asText());
         parseWorker.processOne();
-        mvc.perform(post("/api/v1/resumes/" + resumeId + "/confirm").session(a.session())
-                .cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf())).andExpect(status().isOk());
 
         String create = "{\"schemaVersion\":\"1.1.0\",\"clientRequestId\":\"report-gap-create\","
                 + "\"mode\":\"COMPREHENSIVE\",\"resumeId\":\"" + resumeId
@@ -279,13 +277,13 @@ class LocalApplicationIntegrationTest {
     }
 
     @Test
-    void unconfirmedResumeIsRejectedByInterviewApi() throws Exception {
+    void preparedResumeIsUsableWithoutConfirmationOrCompletedScore() throws Exception {
         Session a = login("demo1", "MirrorDemo1!");
         JsonNode uploaded = uploadDocument("/api/v1/resumes", "unconfirmed.pdf", "application/pdf", a);
         String create = "{\"schemaVersion\":\"1.1.0\",\"clientRequestId\":\"unconfirmed-create\",\"mode\":\"COMPREHENSIVE\",\"resumeId\":\"" + uploaded.path("id").asText() + "\",\"locale\":\"zh-CN\",\"modelDataConsent\":true}";
         mvc.perform(post("/api/v1/interviews").session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf())
-                .contentType(MediaType.APPLICATION_JSON).content(create)).andExpect(status().isConflict());
-        org.junit.jupiter.api.Assertions.assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM interviews", Integer.class));
+                .contentType(MediaType.APPLICATION_JSON).content(create)).andExpect(status().isOk());
+        org.junit.jupiter.api.Assertions.assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM interviews", Integer.class));
     }
 
     @Test
@@ -399,8 +397,6 @@ class LocalApplicationIntegrationTest {
         JsonNode uploaded = uploadDocument("/api/v1/resumes", "sse-resume.pdf", "application/pdf", a);
         UUID resumeId = UUID.fromString(uploaded.path("id").asText());
         parseWorker.processOne();
-        mvc.perform(post("/api/v1/resumes/" + resumeId + "/confirm").session(a.session())
-                .cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf())).andExpect(status().isOk());
         String create = "{\"schemaVersion\":\"1.1.0\",\"clientRequestId\":\"sse-create\","
                 + "\"mode\":\"COMPREHENSIVE\",\"resumeId\":\"" + resumeId
                 + "\",\"locale\":\"zh-CN\",\"modelDataConsent\":true}";
@@ -543,69 +539,6 @@ class LocalApplicationIntegrationTest {
     }
 
     @Test
-    void resumeLifecycleEnforcesOwnerConfirmationEditInvalidationAndDelete() throws Exception {
-        Session a = login("demo1", "MirrorDemo1!");
-        Session b = login("demo2", "MirrorDemo2!");
-        JsonNode uploaded = uploadDocument("/api/v1/resumes", "resume.pdf", "application/pdf", a);
-        UUID id = UUID.fromString(uploaded.path("id").asText());
-        UUID taskId = UUID.fromString(uploaded.path("parseTask").path("id").asText());
-        org.junit.jupiter.api.Assertions.assertEquals("PENDING", uploaded.path("status").asText());
-        mvc.perform(get("/api/v1/interview-sources/resumes/" + id).session(a.session())).andExpect(status().isConflict());
-        mvc.perform(get("/api/v1/resumes/" + id).session(b.session())).andExpect(status().isNotFound());
-        mvc.perform(get("/api/v1/parse-tasks/" + taskId).session(b.session())).andExpect(status().isNotFound());
-        mvc.perform(put("/api/v1/resumes/" + id).session(b.session()).cookie(b.csrfCookie()).header("X-XSRF-TOKEN", b.csrf())
-                .contentType(MediaType.APPLICATION_JSON).content(updateBody(1, "hijack", resumeContent())))
-                .andExpect(status().isNotFound());
-        mvc.perform(post("/api/v1/resumes/" + id + "/confirm").session(b.session()).cookie(b.csrfCookie()).header("X-XSRF-TOKEN", b.csrf()))
-                .andExpect(status().isNotFound());
-        mvc.perform(post("/api/v1/resumes/" + id + "/retry").session(b.session()).cookie(b.csrfCookie()).header("X-XSRF-TOKEN", b.csrf()))
-                .andExpect(status().isNotFound());
-        mvc.perform(delete("/api/v1/resumes/" + id).session(b.session()).cookie(b.csrfCookie()).header("X-XSRF-TOKEN", b.csrf()))
-                .andExpect(status().isNotFound());
-
-        org.junit.jupiter.api.Assertions.assertTrue(parseWorker.processOne());
-        JsonNode parsed = json.readTree(mvc.perform(get("/api/v1/resumes/" + id).session(a.session()))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("data");
-        org.junit.jupiter.api.Assertions.assertEquals("PARSED", parsed.path("status").asText());
-        org.junit.jupiter.api.Assertions.assertEquals("Lin", parsed.path("content").path("personalInfo").path("name").asText());
-        mvc.perform(get("/api/v1/interview-sources/resumes/" + id).session(a.session())).andExpect(status().isConflict());
-        mvc.perform(post("/api/v1/resumes/" + id + "/confirm").session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
-                .andExpect(status().isOk()).andExpect(content().json("{\"data\":{\"status\":\"CONFIRMED\",\"usableForInterview\":true}}", false));
-        mvc.perform(get("/api/v1/interview-sources/resumes/" + id).session(a.session())).andExpect(status().isOk());
-
-        mvc.perform(put("/api/v1/resumes/" + id).session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf())
-                .contentType(MediaType.APPLICATION_JSON).content(updateBody(parsed.path("contentVersion").asInt(), "edited resume", resumeContent())))
-                .andExpect(status().isOk()).andExpect(content().json("{\"data\":{\"status\":\"PARSED\",\"usableForInterview\":false}}", false));
-        mvc.perform(get("/api/v1/interview-sources/resumes/" + id).session(a.session())).andExpect(status().isConflict());
-        mvc.perform(post("/api/v1/resumes/" + id + "/confirm").session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
-                .andExpect(status().isOk());
-        mvc.perform(delete("/api/v1/files/" + uploaded.path("fileId").asText()).session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
-                .andExpect(status().isConflict());
-        mvc.perform(delete("/api/v1/resumes/" + id).session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/v1/resumes/" + id).session(a.session())).andExpect(status().isNotFound());
-        mvc.perform(get("/api/v1/files/" + uploaded.path("fileId").asText()).session(a.session())).andExpect(status().isNotFound());
-    }
-
-    @Test
-    void resumeWithExtractedTextButNoRecognizedSectionsFailsInsteadOfShowingEmptySuccess() throws Exception {
-        Session a = login("demo1", "MirrorDemo1!");
-        JsonNode uploaded = uploadDocument("/api/v1/resumes", "empty-structure.pdf", "application/pdf", a);
-        UUID id = UUID.fromString(uploaded.path("id").asText());
-        UUID taskId = UUID.fromString(uploaded.path("parseTask").path("id").asText());
-
-        org.junit.jupiter.api.Assertions.assertTrue(parseWorker.processOne());
-
-        mvc.perform(get("/api/v1/resumes/" + id).session(a.session())).andExpect(status().isOk())
-                .andExpect(content().json("""
-                        {"data":{"status":"FAILED","parseTask":{"status":"FAILED","errorCode":"RESUME_CONTENT_NOT_RECOGNIZED",
-                        "errorMessage":"文件文字已提取，但没有识别到简历结构内容；请确认版式清晰，或重新上传 PDF/DOCX。"}}}
-                        """, false));
-        mvc.perform(get("/api/v1/parse-tasks/" + taskId).session(a.session())).andExpect(status().isOk())
-                .andExpect(content().json("{\"data\":{\"status\":\"FAILED\"}}", false));
-    }
-
-    @Test
     void questionBankLifecycleSupportsEditConfirmRetryAndRecovery() throws Exception {
         Session a = login("demo1", "MirrorDemo1!");
         JsonNode uploaded = uploadDocument("/api/v1/question-banks", "bank.md", "text/markdown", a);
@@ -656,66 +589,132 @@ class LocalApplicationIntegrationTest {
                 .andExpect(status().isOk());
 
         parser.failNext();
-        JsonNode failed = uploadDocument("/api/v1/resumes", "retry.pdf", "application/pdf", a);
+        JsonNode failed = uploadDocument("/api/v1/question-banks", "retry-bank.pdf", "application/pdf", a);
         UUID failedId = UUID.fromString(failed.path("id").asText());
         UUID retryTaskId = UUID.fromString(failed.path("parseTask").path("id").asText());
         parseWorker.processOne();
-        mvc.perform(get("/api/v1/resumes/" + failedId).session(a.session())).andExpect(status().isOk())
+        mvc.perform(get("/api/v1/question-banks/" + failedId).session(a.session())).andExpect(status().isOk())
                 .andExpect(content().json("{\"data\":{\"status\":\"FAILED\",\"parseTask\":{\"errorCode\":\"TEST_FAILURE\"}}}", false));
-        mvc.perform(post("/api/v1/resumes/" + failedId + "/retry").session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
+        mvc.perform(post("/api/v1/question-banks/" + failedId + "/retry").session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
                 .andExpect(status().isOk()).andExpect(content().json("{\"data\":{\"status\":\"PENDING\",\"parseTask\":{\"retryCount\":1}}}", false));
-        mvc.perform(post("/api/v1/resumes/" + failedId + "/retry").session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
+        mvc.perform(post("/api/v1/question-banks/" + failedId + "/retry").session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
                 .andExpect(status().isConflict());
         parseWorker.processOne();
         mvc.perform(get("/api/v1/parse-tasks/" + retryTaskId).session(a.session())).andExpect(status().isOk())
                 .andExpect(content().json("{\"data\":{\"status\":\"SUCCEEDED\",\"retryCount\":1,\"attemptCount\":2}}", false));
 
-        JsonNode processing = uploadDocument("/api/v1/resumes", "processing.pdf", "application/pdf", a);
+        JsonNode processing = uploadDocument("/api/v1/question-banks", "processing-bank.pdf", "application/pdf", a);
         UUID processingId = UUID.fromString(processing.path("id").asText());
         var task = documents.claimNext("test-worker", java.time.Duration.ofMinutes(3)).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals(processingId, task.documentId());
-        mvc.perform(delete("/api/v1/resumes/" + processingId).session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
+        mvc.perform(delete("/api/v1/question-banks/" + processingId).session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
                 .andExpect(status().isConflict());
         org.junit.jupiter.api.Assertions.assertEquals(1, documents.recoverExpired(java.time.Instant.now().plus(java.time.Duration.ofMinutes(4))));
-        mvc.perform(get("/api/v1/resumes/" + processingId).session(a.session())).andExpect(status().isOk())
+        mvc.perform(get("/api/v1/question-banks/" + processingId).session(a.session())).andExpect(status().isOk())
                 .andExpect(content().json("{\"data\":{\"status\":\"PENDING\",\"parseTask\":{\"errorCode\":\"WORKER_INTERRUPTED\"}}}", false));
         var replacement = documents.claimNext("replacement-worker", java.time.Duration.ofMinutes(3)).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals(2, replacement.attemptCount());
         org.junit.jupiter.api.Assertions.assertFalse(documents.complete(task.id(), task.documentId(), task.ownerId(),
-                resumeContent(), task.startedAt(), task.workerId(), task.attemptCount()));
+                questionContent(), task.startedAt(), task.workerId(), task.attemptCount()));
         org.junit.jupiter.api.Assertions.assertFalse(documents.fail(task.id(), task.documentId(), task.ownerId(),
                 "STALE_FAILURE", "must be ignored", task.startedAt(), task.workerId(), task.attemptCount()));
         org.junit.jupiter.api.Assertions.assertTrue(documents.complete(replacement.id(), replacement.documentId(),
-                replacement.ownerId(), resumeContent(), replacement.startedAt(), replacement.workerId(),
+                replacement.ownerId(), questionContent(), replacement.startedAt(), replacement.workerId(),
                 replacement.attemptCount()));
-        mvc.perform(get("/api/v1/resumes/" + processingId).session(a.session())).andExpect(status().isOk())
+        mvc.perform(get("/api/v1/question-banks/" + processingId).session(a.session())).andExpect(status().isOk())
                 .andExpect(content().json("{\"data\":{\"status\":\"PARSED\",\"parseTask\":{\"status\":\"SUCCEEDED\",\"attemptCount\":2}}}", false));
     }
 
     @Test
-    void failedObjectDeletionKeepsDocumentRetryable() throws Exception {
+    void resumeUploadDeduplicationIsUserScopedAndQueriesDoNotIncreaseCount() throws Exception {
         Session a = login("demo1", "MirrorDemo1!");
-        JsonNode uploaded = uploadDocument("/api/v1/resumes", "delete-retry.pdf", "application/pdf", a);
-        UUID id = UUID.fromString(uploaded.path("id").asText());
-        UUID fileId = UUID.fromString(uploaded.path("fileId").asText());
-        org.junit.jupiter.api.Assertions.assertTrue(parseWorker.processOne());
-        storage.failDeletes = true;
+        Session b = login("demo2", "MirrorDemo2!");
+        JsonNode first = uploadDocument("/api/v1/resumes", "resume.pdf", "application/pdf", a);
+        String id = first.path("id").asString();
+        org.junit.jupiter.api.Assertions.assertTrue(first.path("usableForInterview").asBoolean());
+        org.junit.jupiter.api.Assertions.assertEquals("PENDING", first.path("analyzeStatus").asString());
+        org.junit.jupiter.api.Assertions.assertFalse(first.has("summary"));
+        JsonNode repeated = uploadDocument("/api/v1/resumes", "resume.pdf", "application/pdf", a);
+        org.junit.jupiter.api.Assertions.assertEquals(id, repeated.path("id").asString());
+        org.junit.jupiter.api.Assertions.assertEquals(2, repeated.path("accessCount").asInt());
+        JsonNode other = uploadDocument("/api/v1/resumes", "resume.pdf", "application/pdf", b);
+        org.junit.jupiter.api.Assertions.assertNotEquals(id, other.path("id").asString());
+        mvc.perform(get("/api/v1/resumes/" + id + "/detail").session(a.session())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.resume.accessCount").value(2));
+        for (String suffix : java.util.List.of("detail", "preview", "file", "export")) {
+            mvc.perform(get("/api/v1/resumes/" + id + "/" + suffix).session(b.session())).andExpect(status().isNotFound());
+        }
+        mvc.perform(post("/api/v1/resumes/" + id + "/reanalyze").session(b.session()).cookie(b.csrfCookie()).header("X-XSRF-TOKEN", b.csrf())).andExpect(status().isNotFound());
+        mvc.perform(delete("/api/v1/resumes/" + id).session(b.session()).cookie(b.csrfCookie()).header("X-XSRF-TOKEN", b.csrf())).andExpect(status().isNotFound());
+        mvc.perform(get("/api/v1/resumes?page=0&size=1").session(a.session())).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.total").value(1)).andExpect(jsonPath("$.data.items.length()").value(1));
+        mvc.perform(get("/api/v1/resumes?size=101").session(a.session())).andExpect(status().isBadRequest());
+    }
 
-        mvc.perform(delete("/api/v1/resumes/" + id).session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
-                .andExpect(status().isBadGateway());
-        mvc.perform(get("/api/v1/resumes/" + id).session(a.session())).andExpect(status().isOk())
-                .andExpect(content().json("{\"data\":{\"status\":\"DELETE_FAILED\"}}", false));
-        mvc.perform(get("/api/v1/files/" + fileId).session(a.session())).andExpect(status().isOk());
+    @Test
+    void resumePlainTextRemainsUsableWhenNoStructuredSectionsAreRecognized() throws Exception {
+        Session a = login("demo1", "MirrorDemo1!");
+        JsonNode result = uploadDocument("/api/v1/resumes", "empty-structure.pdf", "application/pdf", a);
+        org.junit.jupiter.api.Assertions.assertTrue(result.path("usableForInterview").asBoolean());
+        org.junit.jupiter.api.Assertions.assertTrue(result.path("resumeText").asString().contains("No recognized"));
+        org.junit.jupiter.api.Assertions.assertEquals("interviewmirror.resume-content.disabled.v1",
+                result.path("content").path("schemaVersion").asString());
+        mvc.perform(get("/api/v1/resumes/" + result.path("id").asString() + "/preview").session(a.session()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.resumeText").isNotEmpty())
+                .andExpect(jsonPath("$.data.usableForInterview").value(true));
+    }
 
-        storage.failDeletes = false;
+    @Test
+    void resumeAnalysisIsAtomicFencedAndRecoversWithBoundedRetries() throws Exception {
+        Session a = login("demo1", "MirrorDemo1!");
+        UUID id = UUID.fromString(uploadDocument("/api/v1/resumes", "resume.pdf", "application/pdf", a).path("id").asString());
+        UUID user = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        var obsolete = resumes.claim(id).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertTrue(resumes.claim(id).isEmpty());
+        org.junit.jupiter.api.Assertions.assertEquals(1, resumes.recover(java.time.Instant.now().plusSeconds(1), java.time.Instant.now().plusSeconds(1)));
+        var current = resumes.claim(id).orElseThrow();
+        var scores = new local.interviewmirror.backend.resumes.ResumeGradingService.Scores(12, 12, 15, 8, 30);
+        var result = new local.interviewmirror.backend.resumes.ResumeGradingService.Result(scores, java.util.List.of(), java.util.List.of());
+        org.junit.jupiter.api.Assertions.assertFalse(resumes.complete(obsolete, result));
+        org.junit.jupiter.api.Assertions.assertTrue(resumes.complete(current, result));
+        org.junit.jupiter.api.Assertions.assertFalse(resumes.complete(current, result));
+        org.junit.jupiter.api.Assertions.assertEquals(1, resumes.analyses(user, id, 0, 20).total());
+        org.junit.jupiter.api.Assertions.assertEquals("COMPLETED", resumes.find(id).orElseThrow().analyzeStatus());
+        resumes.reanalyze(user, id);
+        for (int retry=0;retry<=3;retry++) {
+            var attempt = resumes.claim(id, retry).orElseThrow();
+            resumes.fail(attempt);
+            if (retry < 3) org.junit.jupiter.api.Assertions.assertTrue(resumes.claim(id, retry).isEmpty(), "旧重试消息不能领取新一轮任务");
+        }
+        org.junit.jupiter.api.Assertions.assertEquals("FAILED", resumes.find(id).orElseThrow().analyzeStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(1, resumes.analyses(user, id, 0, 20).total());
+        uploadDocument("/api/v1/resumes", "resume.pdf", "application/pdf", a);
+        org.junit.jupiter.api.Assertions.assertEquals("FAILED", resumes.find(id).orElseThrow().analyzeStatus());
+        resumes.reanalyze(user, id);
+        org.junit.jupiter.api.Assertions.assertNull(resumes.find(id).orElseThrow().analyzeError());
+        for (int i=0;i<4;i++) resumes.recover(java.time.Instant.now().plusSeconds(1), java.time.Instant.now().plusSeconds(1));
+        org.junit.jupiter.api.Assertions.assertEquals("FAILED", resumes.find(id).orElseThrow().analyzeStatus());
+    }
+
+    @Test
+    void resumeDeletionRetainsCleanupStateUntilObjectsAreRemoved() throws Exception {
+        Session a = login("demo1", "MirrorDemo1!");
+        UUID id = UUID.fromString(uploadDocument("/api/v1/resumes", "delete.pdf", "application/pdf", a).path("id").asString());
+        var claim = resumes.claim(id).orElseThrow();
         mvc.perform(delete("/api/v1/resumes/" + id).session(a.session()).cookie(a.csrfCookie()).header("X-XSRF-TOKEN", a.csrf()))
-                .andExpect(status().isOk());
-        mvc.perform(get("/api/v1/resumes/" + id).session(a.session())).andExpect(status().isNotFound());
-        mvc.perform(get("/api/v1/files/" + fileId).session(a.session())).andExpect(status().isNotFound());
-        org.junit.jupiter.api.Assertions.assertTrue(storage.keys().isEmpty());
+                .andExpect(status().isAccepted()).andExpect(jsonPath("$.data.deleteStatus").value("DELETING"));
+        org.junit.jupiter.api.Assertions.assertFalse(resumes.heartbeat(id, claim.analyzeAttemptId()));
+        var task = resumes.pendingCleanup().getFirst();
+        resumes.cleanupFailed(task);
+        resumes.finishDelete(id);
+        org.junit.jupiter.api.Assertions.assertEquals("DELETE_FAILED", resumes.find(id).orElseThrow().deleteStatus());
+        mvc.perform(get("/api/v1/interview-sources/resumes/" + id).session(a.session())).andExpect(status().isConflict());
+        storage.delete(task.objectKey()); resumes.cleaned(task.id()); resumes.finishDelete(id);
+        org.junit.jupiter.api.Assertions.assertTrue(resumes.find(id).isEmpty());
     }
 
     private JsonNode uploadDocument(String endpoint, String filename, String contentType, Session session) throws Exception {
+        if (endpoint.equals("/api/v1/resumes")) endpoint += "/upload";
         byte[] data = filename.endsWith(".pdf") ? "%PDF-1.7\nfixture".getBytes() : "synthetic fixture".getBytes();
         MvcResult result = mvc.perform(multipart(endpoint).file(new MockMultipartFile("file", filename, contentType, data))
                         .session(session.session()).cookie(session.csrfCookie()).header("X-XSRF-TOKEN", session.csrf()))
@@ -782,6 +781,16 @@ class LocalApplicationIntegrationTest {
     static class StorageTestConfiguration {
         @Bean @Primary MemoryStorage memoryStorage() { return new MemoryStorage(); }
         @Bean @Primary ControlledParser controlledParser() { return new ControlledParser(); }
+        @Bean @Primary local.interviewmirror.backend.resumes.ResumeParser controlledResumeParser(
+                local.interviewmirror.backend.resumes.ResumeProperties properties, ControlledParser source) {
+            return new local.interviewmirror.backend.resumes.ResumeParser(properties) {
+                @Override public String detect(byte[] bytes, String filename) { return "application/pdf"; }
+                @Override public String parse(byte[] bytes, String filename, String contentType) {
+                    return source.parse(filename, contentType, bytes);
+                }
+            };
+        }
+
         @Bean @Primary DeterministicInterviewGraph deterministicInterviewGraph() { return new DeterministicInterviewGraph(); }
         @Bean @Primary ReportModel deterministicReportModel(ObjectMapper json) {
             return new ReportModel() {

@@ -12,8 +12,19 @@ import org.bsc.langgraph4j.state.AgentState;
 
 public class LangGraph4jInterviewGraph implements InterviewGraphRuntime {
     private final CompiledGraph<AgentState> graph;
+    private final org.bsc.langgraph4j.checkpoint.PostgresSaver saver;
 
-    public LangGraph4jInterviewGraph(CompiledGraph<AgentState> graph) { this.graph = graph; }
+    public LangGraph4jInterviewGraph(CompiledGraph<AgentState> graph) { this(graph, null); }
+    public LangGraph4jInterviewGraph(CompiledGraph<AgentState> graph, org.bsc.langgraph4j.checkpoint.PostgresSaver saver) {
+        this.graph = graph; this.saver = saver;
+    }
+    @Override public void delete(UUID interviewId) throws Exception {
+        if (saver != null) {
+            if (saver instanceof ResumeAwarePostgresSaver fenced) fenced.erase(interviewId);
+            else saver.release(config(interviewId));
+            saver.clearCheckpointsCache(interviewId.toString());
+        }
+    }
 
     @Override
     public GraphSnapshot begin(UUID interviewId, UUID ownerId, InterviewMode mode,

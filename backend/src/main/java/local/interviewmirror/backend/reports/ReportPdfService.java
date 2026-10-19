@@ -65,6 +65,7 @@ public class ReportPdfService {
             String digest = sha256(bytes);
             String key = "users/" + ownerId + "/reports/" + reportId + "/" + digest + ".pdf";
             boolean objectStored = false;
+            reports.reservePdfWrite(ownerId, reportId, key);
             try {
                 try (var data = new java.io.ByteArrayInputStream(bytes)) { storage.put(key, data, bytes.length, "application/pdf"); }
                 objectStored = true;
@@ -94,6 +95,36 @@ public class ReportPdfService {
         return frame.getClassName() + "." + frame.getMethodName() + ":" + frame.getLineNumber();
     }
 
+    public byte[] renderResume(String title, local.interviewmirror.backend.resumes.ResumeViews.Analysis analysis) {
+        try (PDDocument document = new PDDocument(); FontHandle handle = loadFont(document)) {
+            document.getDocumentInformation().setTitle(title + " · 简历分析");
+            document.getDocumentInformation().setAuthor("InterviewMirror");
+            Canvas canvas = new Canvas(document, handle.font());
+            canvas.heading(title + " · 简历分析", 18);
+            canvas.body("分析时间：" + analysis.analyzedAt() + " · 标准：" + analysis.rubricVersion(), 9, false);
+            canvas.heading("总分：" + analysis.overallScore() + " / 100", 15);
+            canvas.body("项目经验 " + analysis.projectScore() + "/40 · 技能匹配 " + analysis.skillMatchScore() + "/20", 11, false);
+            canvas.body("内容 " + analysis.contentScore() + "/15 · 结构 " + analysis.structureScore() + "/15 · 表达 " + analysis.expressionScore() + "/10", 11, false);
+            canvas.heading("优点", 14);
+            for (JsonNode item : analysis.strengths()) {
+                canvas.body(item.path("text").asString(), 10, false);
+                canvas.gap(10);
+            }
+            canvas.heading("改进建议", 14);
+            for (JsonNode item : analysis.suggestions()) {
+                canvas.body(item.path("category").asString() + " · " + item.path("priority").asString() + "优先级"
+                        + ("SUPPLEMENT".equals(item.path("type").asString()) ? " · 补充建议" : ""), 10, true);
+                canvas.body(item.path("issue").asString(), 10, false);
+                canvas.body(item.path("recommendation").asString(), 10, false);
+                canvas.gap(12);
+            }
+            canvas.close();
+            ByteArrayOutputStream output = new ByteArrayOutputStream(); document.save(output); return output.toByteArray();
+        } catch (Exception error) {
+            log.warn("resume PDF generation failed analysis={} type={}", analysis.id(), error.getClass().getSimpleName());
+            throw new ApiException(HttpStatus.BAD_GATEWAY, "RESUME_PDF_FAILED", "简历分析 PDF 生成失败，请检查字体配置。");
+        }
+    }
     byte[] render(JsonNode report, JsonNode gap) throws Exception {
         try (PDDocument document = new PDDocument(); FontHandle handle = loadFont(document)) {
             PDFont font = handle.font();

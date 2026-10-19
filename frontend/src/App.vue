@@ -4,6 +4,8 @@ import { restoreSession, confirmDocument, createDocument, createQuestionBank, de
 import { canReviewDocument, canRetryDocument, documentStatusLabel, questionBankReviewCopy } from './document-state.js'
 import { resumeViewModel } from './resume-display.js'
 import { reportTaskLabel, visibleReportScores } from './report-display.js'
+import { listResumePage, getResumeDetail, downloadResumeFile } from './api.js'
+import ResumeAnalysis from './ResumeAnalysis.vue'
 
 const navItems = [
   { id: 'home', label: '工作台', icon: 'home' },
@@ -14,6 +16,21 @@ const navItems = [
 ]
 
 const resumes = ref([])
+const resumePage = ref(0)
+const resumeTotal = ref(0)
+const interviewResumes = ref([])
+const interviewResumePage = ref(0)
+const interviewResumeTotal = ref(0)
+const resumeCache = ref({})
+const resumeChoices = computed(() => {
+  const byId = new Map([...interviewResumes.value, ...resumes.value].map((resume) => [resume.id, resume]))
+  for (const resume of Object.values(resumeCache.value)) byId.set(resume.id, resume)
+  return [...byId.values()]
+})
+const selectedResume = computed(() => resumeChoices.value.find((resume) => resume.id === selectedResumeId.value) ?? null)
+const resumeUploadBusy = ref(false)
+const analysisPage = ref(0)
+const resumeInterviewPage = ref(0)
 const banks = ref([])
 const reports = ref([])
 const deletingReportInterviews = ref(new Set())
@@ -207,19 +224,60 @@ function remoteItem(resource) {
     name: resource.title, fileName: resource.originalFilename, format: extension,
     size: resource.sizeBytes ? formatSize(resource.sizeBytes) : '手动创建',
     updated: new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium' }).format(new Date(resource.updatedAt)),
-    ready: resource.usableForInterview === true, statusLabel: documentStatusLabel(resource.status),
+    ready: resource.usableForInterview === true,
+    status: resource.type === 'RESUME' ? (resource.deleteStatus === 'ACTIVE' ? 'PARSED' : resource.deleteStatus) : resource.status,
+    statusLabel: resource.type === 'RESUME' ? resumeStatusLabel(resource) : documentStatusLabel(resource.status),
     questions: questions.length, questionItems: questions,
     skills: skills.join('、'), project: projects.map((item) => item.name || item.description || '').filter(Boolean).join('；'),
     projects: projects.length, educationText: education.map((item) => item.details || item.institution || '').filter(Boolean).join('；'),
   }
 }
 
+function rememberResumes(items) {
+  resumeCache.value = { ...resumeCache.value, ...Object.fromEntries(items.map((resume) => [resume.id, resume])) }
+}
+
 async function loadOwnedResources() {
-  const [resumeRows, bankRows] = await Promise.all([listDocuments('RESUME'), listDocuments('QUESTION_BANK')])
-  resumes.value = resumeRows.map(remoteItem)
+  const [resumeRows, interviewRows, bankRows] = await Promise.all([
+    listResumePage(resumePage.value), listResumePage(interviewResumePage.value, true), listDocuments('QUESTION_BANK'),
+  ])
+  resumes.value = resumeRows.items.map(remoteItem)
+  resumeTotal.value = resumeRows.total
+  interviewResumes.value = interviewRows.items.map(remoteItem)
+  interviewResumeTotal.value = interviewRows.total
+  rememberResumes([...resumes.value, ...interviewResumes.value])
   banks.value = bankRows.map(remoteItem)
-  selectedResumeId.value = resumes.value.find((item) => item.default)?.id ?? resumes.value[0]?.id ?? ''
+  selectedResumeId.value = interviewResumes.value.find((item) => item.default)?.id ?? interviewResumes.value[0]?.id ?? ''
   selectedBankId.value = banks.value[0]?.id ?? ''
+  for (const resume of resumes.value) if (resumeNeedsPolling(resume)) pollDocument('RESUME', resume.id)
+}
+
+function resumeStatusLabel(resume) {
+  if (resume.deleteStatus === 'DELETING') return '删除中'
+  if (resume.deleteStatus === 'DELETE_FAILED') return '删除待重试'
+  return ({ PENDING: '等待评分', PROCESSING: '正在评分', COMPLETED: '评分完成', FAILED: '评分失败' })[resume.analyzeStatus] || '可用于面试'
+}
+function resumeNeedsPolling(resume) {
+  return resume.deleteStatus !== 'ACTIVE' || ['PENDING', 'PROCESSING'].includes(resume.analyzeStatus)
+}
+async function changeResumePage(pageNumber) {
+  try {
+    const result = await listResumePage(pageNumber)
+    resumePage.value = pageNumber; resumeTotal.value = result.total
+    resumes.value = result.items.map(remoteItem)
+    rememberResumes(resumes.value)
+    for (const resume of resumes.value) if (resumeNeedsPolling(resume)) pollDocument('RESUME', resume.id)
+  } catch (error) { showToast(error.message) }
+}
+
+async function changeInterviewResumePage(pageNumber) {
+  try {
+    const result = await listResumePage(pageNumber, true)
+    interviewResumePage.value = pageNumber
+    interviewResumeTotal.value = result.total
+    interviewResumes.value = result.items.map(remoteItem)
+    rememberResumes(interviewResumes.value)
+  } catch (error) { showToast(error.message) }
 }
 
 onMounted(async () => {
@@ -258,6 +316,9 @@ async function submitLogin() {
 }
 
 async function signOut() {
+  parseTimers.forEach(timer => clearTimeout(timer)); parseTimers.clear()
+  resumePage.value = 0; resumeTotal.value = 0
+  interviewResumePage.value = 0; interviewResumeTotal.value = 0; interviewResumes.value = []; resumeCache.value = {}
   closeInterviewEvents()
   clearInterval(reportPollTimer)
   clearInterval(reportHistoryPollTimer)
@@ -276,6 +337,9 @@ async function signOut() {
 }
 
 function handleExpiredSession() {
+  parseTimers.forEach(timer => clearTimeout(timer)); parseTimers.clear()
+  resumePage.value = 0; resumeTotal.value = 0
+  interviewResumePage.value = 0; interviewResumeTotal.value = 0; interviewResumes.value = []; resumeCache.value = {}
   clearInterval(reportPollTimer)
   clearInterval(reportHistoryPollTimer)
   reportPollingInterviewId.value = null
@@ -302,7 +366,7 @@ const pageHeading = computed(() => ({
   reports: ['历史报告', '回看每一次练习，找到持续进步的证据。'],
   reportDetail: ['面试复盘', '把表现拆解清楚，让下一次准备更有方向。'],
   banks: ['自定义题库', '整理你的题目，在专项面试中逐题练习。'],
-  resumes: ['我的简历', '查看解析后的简历内容，确认后即可用于综合面试。'],
+  resumes: ['我的简历', '查看简历正文、评分与改进建议，上传后即可用于综合面试。'],
   resumeDetail: ['简历详情', '查看本地解析出的简历内容与个人经历。'],
 }[page.value] ?? ['工作台', '']))
 
@@ -467,6 +531,9 @@ function navigate(destination) {
 }
 
 watch(page, (destination) => {
+  if (['resumes', 'resumeDetail'].includes(destination)) {
+    for (const resume of resumes.value) if (resumeNeedsPolling(resume)) pollDocument('RESUME', resume.id)
+  }
   clearInterval(reportHistoryPollTimer)
   reportHistoryPollTimer = undefined
   if (destination !== 'reports') return
@@ -635,18 +702,28 @@ async function openReport(report) {
   finally { reportBusy.value = false }
 }
 
-function restartReport(report) {
+async function restartReport(report) {
   mode.value = report.modeCode === 'COMPREHENSIVE' || report.mode === '综合面试' ? 'COMPREHENSIVE' : 'QUESTION_BANK'
-  const resume = resumes.value.find((item) => item.id === report.resumeId && item.ready)
-    ?? resumes.value.find((item) => item.ready && item.default)
-    ?? resumes.value.find((item) => item.ready)
+  let resume = resumeChoices.value.find((item) => item.id === report.resumeId && item.ready)
+  if (!resume && report.resumeId) {
+    try {
+      const detail = await getResumeDetail(report.resumeId)
+      const source = remoteItem(detail.resume)
+      if (source.ready) {
+        resume = source
+        rememberResumes([source])
+      }
+    } catch { /* The original resume may have been deleted or access may have changed. */ }
+  }
+  resume ??= resumeChoices.value.find((item) => item.ready && item.default)
+    ?? resumeChoices.value.find((item) => item.ready)
   const bank = banks.value.find((item) => item.id === report.bankId && item.ready)
     ?? banks.value.find((item) => item.ready)
   selectedResumeId.value = resume?.id ?? ''
   selectedBankId.value = bank?.id ?? ''
   jdText.value = mode.value === 'COMPREHENSIVE' ? report.jdText ?? '' : ''
   navigate('practice')
-  if (mode.value === 'COMPREHENSIVE' && !resume) showToast('原简历当前不可用，请先选择或确认一份简历。')
+  if (mode.value === 'COMPREHENSIVE' && !resume) showToast('原简历当前不可用，请先选择一份可用简历。')
   if (mode.value === 'QUESTION_BANK' && !bank) showToast('原题库当前不可用，请先选择或确认一份题库。')
 }
 
@@ -658,8 +735,8 @@ async function beginInterview() {
   if (!modelDataConsent.value) return showToast('请先确认面试资料将发送至所选模型服务处理')
   isThinking.value = true
   if (mode.value === 'COMPREHENSIVE') {
-    const resume = resumes.value.find((item) => item.id === selectedResumeId.value && item.ready)
-    if (!resume) { isThinking.value = false; return showToast('请先选择一份已确认的简历') }
+    const resume = selectedResume.value?.ready ? selectedResume.value : null
+    if (!resume) { isThinking.value = false; return showToast('请先选择一份可用简历') }
     if (jdText.value.trim().length > 1500) { isThinking.value = false; return showToast('JD 请控制在 1500 字以内') }
     try { await validateInterviewSource('RESUME', resume.id) } catch (error) { isThinking.value = false; return showToast(error.message) }
     reportTitleDraft.value = jdText.value.trim().slice(0, 26) || 'AI 应用 / AI 全栈实习'
@@ -766,15 +843,19 @@ async function onResumeSelected(event) {
   const file = event.target.files?.[0]
   event.target.value = ''
   if (!file) return
-  if (file.size > 20 * 1024 * 1024) return showToast('文件不能超过 20MB')
+  if (file.size > 10 * 1024 * 1024) return showToast('简历不能超过 10MB')
+  if (resumeUploadBusy.value) return
+  resumeUploadBusy.value = true
   try {
     const document = await createDocument('RESUME', file)
-    resumes.value.unshift(remoteItem(document))
+    await changeResumePage(0)
+    await changeInterviewResumePage(0)
     selectedResumeId.value = document.id
     page.value = 'resumes'
-    showToast('简历已上传，正在排队解析')
+    showToast('简历正文已准备完成，可用于面试；评分状态已更新')
     pollDocument('RESUME', document.id)
   } catch (error) { showToast(error.message) }
+  finally { resumeUploadBusy.value = false }
 }
 
 function openBankPicker() {
@@ -799,6 +880,7 @@ async function onBankSelected(event) {
 function replaceDocument(type, document) {
   const collection = type === 'RESUME' ? resumes : banks
   const mapped = remoteItem(document)
+  if (type === 'RESUME') rememberResumes([mapped])
   const index = collection.value.findIndex((item) => item.id === document.id)
   if (index < 0) collection.value.unshift(mapped)
   else collection.value.splice(index, 1, mapped)
@@ -806,26 +888,35 @@ function replaceDocument(type, document) {
 
 function pollDocument(type, id) {
   if (parseTimers.has(id)) return
+  const pollingUser = currentUserInfo.value
   const poll = async () => {
+    if (pollingUser !== currentUserInfo.value || (type === 'RESUME' && (!['resumes', 'resumeDetail'].includes(page.value) || !resumes.value.some(item => item.id === id)))) { parseTimers.delete(id); return }
     try {
-      const document = await getDocument(type, id)
+      const document = type === 'RESUME' && page.value === 'resumeDetail' && selectedResumeDetailId.value === id
+        ? await getResumeDetail(id, analysisPage.value, resumeInterviewPage.value).then(detail => ({ ...detail.resume, analyses: detail.analyses, interviews: detail.interviews }))
+        : await getDocument(type, id)
+      if (pollingUser !== currentUserInfo.value || (type === 'RESUME' && !resumes.value.some(item => item.id === id))) { parseTimers.delete(id); return }
       replaceDocument(type, document)
-      if (['PENDING', 'PROCESSING'].includes(document.status)) {
-        parseTimers.set(id, setTimeout(poll, 1800))
+      if (type === 'RESUME' ? resumeNeedsPolling(document) : ['PENDING', 'PROCESSING'].includes(document.status)) {
+        parseTimers.set(id, setTimeout(poll, type === 'RESUME' ? 3000 : 1800))
         return
       }
       parseTimers.delete(id)
+      if (type === 'RESUME') return
       if (document.status === 'PARSED') {
-        if (type === 'RESUME') showToast('简历解析完成，可查看内容并确认使用')
-        else {
-          showToast('题库解析完成，请检查并确认资料')
-          openDocumentReview(type, document)
-        }
+        showToast('题库解析完成，请检查并确认资料')
+        openDocumentReview(type, document)
       } else if (document.status === 'FAILED') {
         showToast(document.parseTask?.errorMessage || '解析失败，可重新解析')
       }
     } catch (error) {
       parseTimers.delete(id)
+      if (type === 'RESUME' && error.status === 404) {
+        resumes.value = resumes.value.filter((item) => item.id !== id)
+        resumeTotal.value = Math.max(0, resumeTotal.value - 1)
+        loadReportHistory().catch(() => {})
+        return
+      }
       showToast(error.message)
     }
   }
@@ -855,21 +946,43 @@ async function openDocument(type, document) {
 }
 
 async function openResumeDetails(resume) {
-  if (!['PARSED', 'CONFIRMED'].includes(resume.status)) return showToast(documentStatusLabel(resume.status))
   try {
     const detail = await getDocument('RESUME', resume.id)
     replaceDocument('RESUME', detail)
     selectedResumeDetailId.value = detail.id
+    analysisPage.value = 0
+    resumeInterviewPage.value = 0
     page.value = 'resumeDetail'
   } catch (error) { showToast(error.message) }
 }
 
-async function confirmResume(resume) {
+async function reanalyzeResume(resume) {
   try {
-    const confirmed = await confirmDocument('RESUME', resume.id)
-    replaceDocument('RESUME', confirmed)
-    selectedResumeId.value = resume.id
-    showToast('简历已确认，可用于综合面试')
+    const updated = await retryDocument('RESUME', resume.id)
+    replaceDocument('RESUME', { ...updated, analyses: resume.analyses, interviews: resume.interviews })
+    pollDocument('RESUME', resume.id)
+    showToast('已提交重新分析')
+  } catch (error) { showToast(error.message) }
+}
+
+async function changeResumeHistory(kind, nextPage) {
+  if (!activeResume.value) return
+  try {
+    const a = kind === 'analyses' ? nextPage : analysisPage.value
+    const i = kind === 'interviews' ? nextPage : resumeInterviewPage.value
+    const detail = await getResumeDetail(activeResume.value.id, a, i)
+    analysisPage.value = a; resumeInterviewPage.value = i
+    replaceDocument('RESUME', { ...detail.resume, analyses: detail.analyses, interviews: detail.interviews })
+  } catch (error) { showToast(error.message) }
+}
+
+async function downloadResume(resume, report = false) {
+  try {
+    const blob = await downloadResumeFile(resume.id, report)
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url; anchor.download = report ? `${resume.name}-分析.pdf` : resume.fileName
+    anchor.click(); URL.revokeObjectURL(url)
   } catch (error) { showToast(error.message) }
 }
 
@@ -944,15 +1057,33 @@ async function removeOwnedResource(collection, resource) {
   try {
     await deleteDocument(collection === resumes ? 'RESUME' : 'QUESTION_BANK', resource.id)
     collection.value = collection.value.filter((item) => item.id !== resource.id)
-    if (selectedResumeId.value === resource.id) selectedResumeId.value = resumes.value[0]?.id ?? ''
+    if (collection === resumes) {
+      const { [resource.id]: removed, ...remaining } = resumeCache.value
+      resumeCache.value = remaining
+      interviewResumes.value = interviewResumes.value.filter((item) => item.id !== resource.id)
+      if (selectedResumeId.value === resource.id) selectedResumeId.value = interviewResumes.value.find((item) => item.ready)?.id ?? ''
+    }
     if (selectedBankId.value === resource.id) selectedBankId.value = banks.value[0]?.id ?? ''
     showToast('资料和关联文件已删除')
   } catch (error) { showToast(error.message) }
 }
 
-async function deleteResume(resume) { await removeOwnedResource(resumes, resume) }
+async function deleteResume(resume) {
+  const confirmation = resume.deleteStatus === 'DELETE_FAILED'
+    ? '重试清理这份简历及其关联面试、回答、报告和文件？'
+    : '删除这份简历及其全部面试、回答、报告和文件？'
+  if (!window.confirm(confirmation)) return
+  try {
+    const updated = await deleteDocument('RESUME', resume.id)
+    replaceDocument('RESUME', updated)
+    if (selectedResumeId.value === resume.id) selectedResumeId.value = resumeChoices.value.find((item) => item.id !== resume.id && item.ready)?.id ?? ''
+    pollDocument('RESUME', resume.id)
+    showToast('已开始清理简历及关联记录')
+  } catch (error) { showToast(error.message) }
+}
 
 async function setDefaultResume(resume) {
+  rememberResumes([resume])
   selectedResumeId.value = resume.id
   showToast('已选择本次综合面试使用的简历')
 }
@@ -1103,7 +1234,7 @@ function resetDemo() {
             </div>
             <div class="overview-card prep-card">
               <span class="prep-bubble">✦</span><span class="section-kicker">BEFORE YOU START</span><h3>先准备好这些</h3>
-              <button class="prep-link" @click="navigate('resumes')"><span class="prep-number">01</span><span><strong>确认一份简历</strong><small>{{ resumes.length }} 份简历 · {{ resumes.filter((r) => r.ready).length }} 份可用</small></span><b>→</b></button>
+              <button class="prep-link" @click="navigate('resumes')"><span class="prep-number">01</span><span><strong>选择一份简历</strong><small>{{ resumes.length }} 份简历 · {{ resumes.filter((r) => r.ready).length }} 份可用</small></span><b>→</b></button>
               <button class="prep-link" @click="navigate('banks')"><span class="prep-number">02</span><span><strong>整理你的题库</strong><small>{{ banks.length }} 份题库 · 随时开始专项练习</small></span><b>→</b></button>
             </div>
           </section>
@@ -1138,14 +1269,20 @@ function resetDemo() {
               <template v-if="mode === 'COMPREHENSIVE'">
                 <label class="field-label">选择简历 <span class="required-star">*</span></label>
                 <div class="resume-select-list">
-                  <label v-for="resume in resumes.filter((item) => item.ready)" :key="resume.id" class="select-option" :class="{ chosen: selectedResumeId === resume.id }">
+                  <label v-for="resume in interviewResumes" :key="resume.id" class="select-option" :class="{ chosen: selectedResumeId === resume.id }">
                     <input v-model="selectedResumeId" type="radio" :value="resume.id" />
                     <span class="document-icon"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5M9 12h6m-6 4h5"/></svg></span>
                     <span class="option-copy"><strong>{{ resume.name }}</strong><small>{{ resume.updated }} 更新 · {{ resume.projects }} 段项目经历</small></span>
                     <span v-if="resume.default" class="default-tag">默认</span><span class="radio-custom"></span>
                   </label>
+                  <div v-if="interviewResumeTotal > 20" class="resume-pagination" aria-label="可用于面试的简历分页">
+                    <button :disabled="interviewResumePage === 0" @click="changeInterviewResumePage(interviewResumePage - 1)">上一页</button>
+                    <span>第 {{ interviewResumePage + 1 }} 页 · 共 {{ interviewResumeTotal }} 份可用简历</span>
+                    <button :disabled="(interviewResumePage + 1) * 20 >= interviewResumeTotal" @click="changeInterviewResumePage(interviewResumePage + 1)">下一页</button>
+                  </div>
+                  <p v-if="selectedResume" class="inline-hint">当前选择：{{ selectedResume.name }}</p>
                   <button class="add-inline" @click="openResumePicker">＋ 上传新简历</button>
-                  <p v-if="!resumes.some((item) => item.ready)" class="inline-hint error-hint">请先在“我的简历”上传并确认一份简历。</p>
+                  <p v-if="!interviewResumeTotal" class="inline-hint error-hint">请先在“我的简历”上传一份已提取正文的简历。</p>
                 </div>
                 <label class="field-label jd-label" for="jd-input">目标岗位 JD <span class="optional-tag">选填</span></label>
                 <textarea id="jd-input" v-model="jdText" class="text-field jd-field" maxlength="1500" placeholder="粘贴岗位职责与任职要求…\n\n填写 JD 后，面试问题会参考目标岗位要求。"></textarea>
@@ -1167,7 +1304,7 @@ function resetDemo() {
               </template>
 
               <label class="model-consent"><input v-model="modelDataConsent" type="checkbox" /><span>我同意将本场所选简历或题库内容、回答发送至配置的模型服务，以生成问题和追问。面试回答会保存在本地应用中。</span></label>
-              <div class="privacy-note"><span>◇</span><span>模型服务未配置时，面试无法启动。题库专项不会读取简历，综合面试仅使用已确认简历和可选 JD。</span></div>
+              <div class="privacy-note"><span>◇</span><span>模型服务未配置时，面试无法启动。题库专项不会读取简历，综合面试使用所选简历和可选 JD。</span></div>
 
               <div class="form-actions"><button class="subtle-button" @click="navigate('home')">返回</button><button class="primary-button" :disabled="isThinking" @click="beginInterview">{{ isThinking ? '正在准备问题…' : '开始面试' }} <span>→</span></button></div>
             </section>
@@ -1200,7 +1337,7 @@ function resetDemo() {
               <div class="answer-box"><textarea v-model="answerText" :disabled="isThinking || activeInterview?.status !== 'RUNNING' || activeInterview?.transitionPending || activeTurn?.status !== 'ASKED'" placeholder="输入你的回答…（Enter 发送，Shift + Enter 换行）" @keydown.enter.exact.prevent="submitAnswer"></textarea><div class="answer-controls"><span>{{ pendingAnswerRequest ? '回答请求已保留，可安全重试' : '尽量结合具体经历和结果回答' }}</span><button class="send-button" :disabled="!answerText.trim() || isThinking || activeInterview?.status !== 'RUNNING' || activeInterview?.transitionPending || activeTurn?.status !== 'ASKED'" @click="submitAnswer">{{ pendingAnswerRequest ? '重试提交' : '发送回答' }} <span>↑</span></button></div><button v-if="activeTurn?.type === 'MAIN' && activeTurn?.status === 'ASKED' && activeInterview?.replacementAvailable" class="subtle-button replace-question" :disabled="isThinking || activeInterview?.status !== 'RUNNING'" @click="replaceCurrentQuestion">{{ pendingReplaceRequest ? '重试换题' : '换一道题' }}</button></div>
             </div>
             <aside class="interview-aside"><div class="panel session-card"><span class="section-kicker">SESSION GUIDE</span><h3>保持你的节奏</h3><div class="session-stat"><span>当前进度</span><strong>问题 {{ interviewProgress.current }} <small>/ {{ interviewProgress.target }}</small></strong></div><div class="session-stat"><span>追问方式</span><strong>根据回答动态深入</strong></div><div class="session-separator"></div><p><span>✦</span> 不需要追求完美答案。先讲清你的判断和经历。</p><button class="end-session" :disabled="isThinking || activeInterview?.status === 'COMPLETING'" @click="finishInterview">{{ activeInterview?.status === 'COMPLETING' ? '正在安全结束' : '结束本次面试' }}</button></div>
-              <div class="panel interview-context"><span class="section-kicker">本场资料</span><div v-if="mode === 'COMPREHENSIVE'" class="context-file"><span class="document-icon"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5"/></svg></span><div><strong>{{ resumes.find((resume) => resume.id === selectedResumeId)?.name }}</strong><small>简历已确认</small></div></div><div v-if="jdText.trim()" class="context-jd"><strong>目标 JD</strong><p>{{ jdText.slice(0, 120) }}{{ jdText.length > 120 ? '…' : '' }}</p></div><div v-if="mode === 'QUESTION_BANK'" class="context-file"><span class="document-icon bank-document"><svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20"/></svg></span><div><strong>{{ banks.find((bank) => bank.id === selectedBankId)?.name }}</strong><small>{{ banks.find((bank) => bank.id === selectedBankId)?.questions }} 道已确认题目</small></div></div></div></aside>
+              <div class="panel interview-context"><span class="section-kicker">本场资料</span><div v-if="mode === 'COMPREHENSIVE'" class="context-file"><span class="document-icon"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/><path d="M14 3v5h5"/></svg></span><div><strong>{{ selectedResume?.name }}</strong><small>简历正文已准备完成</small></div></div><div v-if="jdText.trim()" class="context-jd"><strong>目标 JD</strong><p>{{ jdText.slice(0, 120) }}{{ jdText.length > 120 ? '…' : '' }}</p></div><div v-if="mode === 'QUESTION_BANK'" class="context-file"><span class="document-icon bank-document"><svg viewBox="0 0 24 24"><path d="m3 9 9-6 9 6M5 10v9m5-9v9m4-9v9m5-9v9M3 21h18M2 9h20"/></svg></span><div><strong>{{ banks.find((bank) => bank.id === selectedBankId)?.name }}</strong><small>{{ banks.find((bank) => bank.id === selectedBankId)?.questions }} 道已确认题目</small></div></div></div></aside>
           </section>
         </template>
 
@@ -1259,9 +1396,9 @@ function resetDemo() {
         </template>
 
         <template v-else-if="page === 'resumes'">
-          <div class="page-intro"><div><span class="section-kicker">YOUR CAREER STORY</span><h1>我的简历</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" @click="openResumePicker">＋ 上传简历</button></div>
-          <div class="resume-private-note"><span>◇</span><p><strong>本地私有资料</strong> 简历会在本机解析。解析完成后可查看结构化内容；确认后才能用于综合面试。</p></div>
-          <div class="library-toolbar resume-toolbar"><div class="library-tabs"><button class="active">全部简历 <span>{{ resumes.length }}</span></button></div><span class="sort-select">最近更新 <b>⌄</b></span></div>
+          <div class="page-intro"><div><span class="section-kicker">YOUR CAREER STORY</span><h1>我的简历</h1><p>{{ pageHeading[1] }}</p></div><button class="primary-button" :disabled="resumeUploadBusy" @click="openResumePicker">{{ resumeUploadBusy ? '正在提取正文，请稍候…' : '＋ 上传简历' }}</button></div>
+          <div class="resume-private-note"><span>◇</span><p><strong>本地私有资料</strong> 简历在本机提取正文，可直接用于面试。正文会发送给已配置的模型服务进行评分。</p></div>
+          <div class="library-toolbar resume-toolbar"><div class="library-tabs"><button class="active">全部简历 <span>{{ resumeTotal }}</span></button></div><span class="sort-select">最近上传</span></div>
           <div v-if="resumes.length" class="resume-list">
             <article v-for="resume in resumes" :key="resume.id" class="resume-card" :class="{ 'resume-default': resume.id === selectedResumeId && resume.ready }">
               <div class="resume-thumb-wrap">
@@ -1274,24 +1411,26 @@ function resetDemo() {
               </div>
               <div class="resume-card-body">
                 <div class="resume-title-row"><div><h3>{{ resume.name }}</h3><span class="document-status" :class="resume.status.toLowerCase()"><i></i>{{ resume.statusLabel }}</span><span v-if="resume.id === selectedResumeId && resume.ready" class="default-tag">本次已选</span></div><button class="more-button" @click="deleteResume(resume)" title="删除简历">···</button></div>
-                <div class="resume-meta-line"><span>{{ resume.updated }}</span><i>·</i><span>{{ resume.projects }} 段项目经历</span></div>
+                <div class="resume-meta-line"><span>{{ resume.updated }}</span><i>·</i><span>上传 {{ resume.accessCount }} 次 · 面试 {{ resume.interviewCount }} 次</span><span v-if="resume.latestAnalysis"> · {{ resume.latestAnalysis.overallScore }} / 100</span></div><p v-if="resume.analyzeError" class="inline-hint error-hint">{{ resume.analyzeError }}</p>
                 <div class="resume-card-actions">
+                  <button v-if="resume.deleteStatus === 'DELETE_FAILED'" class="subtle-button" @click="deleteResume(resume)">重试删除</button>
                   <button v-if="resume.status === 'PARSED' || resume.status === 'CONFIRMED'" class="resume-view-button" @click="openResumeDetails(resume)">查看简历 <span>→</span></button>
-                  <button v-if="resume.status === 'FAILED'" class="subtle-button" @click="retryParsing('RESUME', resume)">重新解析</button>
-                  <button v-if="resume.fileId" class="text-button" @click="downloadOwnedFile(resume.fileId, resume.fileName || resume.name)">原文件</button>
+                  <button v-if="resume.ready && !['PENDING', 'PROCESSING'].includes(resume.analyzeStatus)" class="subtle-button" @click="reanalyzeResume(resume)">重新分析</button>
+                  <button v-if="resume.ready" class="text-button" @click="downloadResume(resume)">原文件</button>
                   <button v-if="resume.ready && resume.id !== selectedResumeId" class="text-button" @click="setDefaultResume(resume)">用于面试</button>
                 </div>
               </div>
             </article>
-            <button class="resume-add-card" @click="openResumePicker"><span>＋</span><strong>上传另一份简历</strong><small>支持 PDF 或 DOCX，最大 20MB</small></button>
+            <button class="resume-add-card" @click="openResumePicker"><span>＋</span><strong>上传另一份简历</strong><small>支持 PDF、DOC、DOCX、TXT，最大 10MB</small></button>
           </div>
-          <div v-else class="empty-state library-empty"><span>▤</span><strong>还没有简历</strong><p>上传 PDF 或 DOCX，解析后即可查看结构化内容。</p><button class="primary-button" @click="openResumePicker">上传简历</button></div>
+          <div v-else class="empty-state library-empty"><span>▤</span><strong>还没有简历</strong><p>上传 PDF、DOC、DOCX 或 TXT，提取正文后即可使用。</p><button class="primary-button" @click="openResumePicker">上传简历</button></div>
+          <div class="resume-pagination"><button :disabled="resumePage === 0" @click="changeResumePage(resumePage - 1)">上一页</button><span>第 {{ resumePage + 1 }} 页 · 共 {{ resumeTotal }} 份</span><button :disabled="(resumePage + 1) * 20 >= resumeTotal" @click="changeResumePage(resumePage + 1)">下一页</button></div>
         </template>
 
         <template v-else-if="page === 'resumeDetail'">
           <div v-if="activeResume && activeResumeView" class="resume-detail-page">
-            <div class="resume-detail-toolbar"><button class="text-button" @click="page = 'resumes'">← 返回我的简历</button><div class="resume-detail-toolbar-actions"><span class="document-status" :class="activeResume.status.toLowerCase()"><i></i>{{ activeResume.statusLabel }}</span><button v-if="activeResume.fileId" class="subtle-button" @click="downloadOwnedFile(activeResume.fileId, activeResume.fileName || activeResume.name)">下载原文件</button><button v-if="activeResume.ready && activeResume.id !== selectedResumeId" class="subtle-button" @click="setDefaultResume(activeResume)">用于面试</button><button v-if="activeResume.status === 'PARSED'" class="primary-button" @click="confirmResume(activeResume)">确认并用于面试 <span>→</span></button></div></div>
-            <div v-if="activeResume.status === 'PARSED'" class="resume-confirm-hint"><span>◇</span> 以下为系统解析内容。无需编辑；确认后可用于综合面试。</div>
+            <div class="resume-detail-toolbar"><button class="text-button" @click="page = 'resumes'">← 返回我的简历</button><div class="resume-detail-toolbar-actions"><span>{{ activeResume.statusLabel }}</span><button v-if="activeResume.ready" class="subtle-button" @click="downloadResume(activeResume)">下载原文件</button><button v-if="activeResume.ready && activeResume.id !== selectedResumeId" class="subtle-button" @click="setDefaultResume(activeResume)">用于面试</button><button v-if="activeResume.ready && !['PENDING', 'PROCESSING'].includes(activeResume.analyzeStatus)" class="subtle-button" @click="reanalyzeResume(activeResume)">重新分析</button><button v-if="activeResume.latestAnalysis && activeResume.ready" class="primary-button" @click="downloadResume(activeResume, true)">导出分析 PDF</button></div></div>
+            <p v-if="activeResume.analyzeError" class="inline-hint error-hint">{{ activeResume.analyzeError }}</p>
             <article class="resume-document">
               <header class="resume-document-heading"><h1>{{ activeResumeView.name }}</h1><div v-if="activeResumeView.role" class="resume-document-role">{{ activeResumeView.role }}</div><div v-if="activeResumeView.contact.length" class="resume-document-contact"><span v-for="item in activeResumeView.contact" :key="item">{{ item }}</span></div></header>
               <section v-for="section in activeResumeView.sections" :key="section.title" class="resume-document-section">
@@ -1305,16 +1444,20 @@ function resetDemo() {
                   </div>
                 </article>
               </section>
-              <div v-if="!activeResumeView.sections.length" class="resume-no-content"><strong>暂未提取到结构化简历内容</strong><p>可以重新解析原文件，或确认前先下载原文件核对。</p></div>
+              <div v-if="activeResumeView.structuredContentDisabled" class="resume-no-content"><strong>尚未生成结构化简历预览</strong><p>完整提取正文和简历分析仍可使用。需要结构化预览时，将 RESUME_STRUCTURED_CONTENT_ENABLED 设为 true 并重启后端，再点击“重新分析”。</p></div>
+              <div v-else-if="!activeResumeView.sections.length" class="resume-no-content"><strong>暂未提取到结构化简历内容</strong><p>可在下方查看完整提取正文，或下载原文件核对。</p></div>
               <footer class="resume-document-footer">由 InterviewMirror 本地解析 · {{ activeResume.updated }}</footer>
             </article>
+            <section class="panel resume-source-text"><h2>完整正文</h2><pre>{{ activeResume.resumeText }}</pre></section>
+            <section class="panel resume-history"><h2>分析历史 · {{ activeResume.analyses?.total || 0 }} 次</h2><p v-if="!activeResume.analyses?.items?.length">暂无成功分析结果。{{ activeResume.statusLabel }}</p><ResumeAnalysis v-for="analysis in activeResume.analyses?.items || []" :key="analysis.id" :analysis="analysis" /><div class="resume-pagination"><button :disabled="analysisPage === 0" @click="changeResumeHistory('analyses', analysisPage - 1)">上一页</button><span>第 {{ analysisPage + 1 }} 页</span><button :disabled="(analysisPage + 1) * 20 >= (activeResume.analyses?.total || 0)" @click="changeResumeHistory('analyses', analysisPage + 1)">下一页</button></div></section>
+            <section class="panel resume-history"><h2>关联面试 · {{ activeResume.interviews?.total || 0 }} 次</h2><article v-for="interview in activeResume.interviews?.items || []" :key="interview.id"><strong>{{ interview.title }}</strong> · {{ interview.status }} · {{ new Date(interview.createdAt).toLocaleString('zh-CN') }}</article><div class="resume-pagination"><button :disabled="resumeInterviewPage === 0" @click="changeResumeHistory('interviews', resumeInterviewPage - 1)">上一页</button><span>第 {{ resumeInterviewPage + 1 }} 页</span><button :disabled="(resumeInterviewPage + 1) * 20 >= (activeResume.interviews?.total || 0)" @click="changeResumeHistory('interviews', resumeInterviewPage + 1)">下一页</button></div></section>
           </div>
           <div v-else class="empty-state"><strong>没有找到这份简历</strong><button class="subtle-button" @click="page = 'resumes'">返回我的简历</button></div>
         </template>
       </div>
     </main>
 
-    <input ref="resumeInput" class="visually-hidden" type="file" accept=".pdf,.docx" @change="onResumeSelected" />
+    <input ref="resumeInput" class="visually-hidden" type="file" accept=".pdf,.doc,.docx,.txt" @change="onResumeSelected" />
     <input ref="bankInput" class="visually-hidden" type="file" accept=".pdf,.docx,.txt,.md,.markdown" @change="onBankSelected" />
 
     <div v-if="toast" class="toast-message"><span>✓</span>{{ toast }}</div>

@@ -125,6 +125,7 @@ function documentPath(type, id = '') {
 }
 
 export async function listDocuments(type, usableOnly = false) {
+  if (type === 'RESUME') return (await listResumePage(0, usableOnly)).items
   const query = usableOnly ? '?usableOnly=true' : ''
   return request(`${documentPath(type)}${query}`)
 }
@@ -132,7 +133,7 @@ export async function listDocuments(type, usableOnly = false) {
 export async function createDocument(type, file) {
   const form = new FormData()
   form.set('file', file)
-  return request(documentPath(type), { method: 'POST', body: form })
+  return request(documentPath(type) + (type === 'RESUME' ? '/upload' : ''), { method: 'POST', body: form })
 }
 
 export async function createQuestionBank(title) {
@@ -142,6 +143,10 @@ export async function createQuestionBank(title) {
 }
 
 export async function getDocument(type, id) {
+  if (type === 'RESUME') {
+    const detail = await getResumeDetail(id)
+    return { ...detail.resume, analyses: detail.analyses, interviews: detail.interviews }
+  }
   return request(documentPath(type, id))
 }
 
@@ -156,11 +161,31 @@ export async function confirmDocument(type, id) {
 }
 
 export async function retryDocument(type, id) {
-  return request(`${documentPath(type, id)}/retry`, { method: 'POST' })
+  return request(`${documentPath(type, id)}/${type === 'RESUME' ? 'reanalyze' : 'retry'}`, { method: 'POST' })
 }
 
 export async function deleteDocument(type, id) {
   return request(documentPath(type, id), { method: 'DELETE' })
+}
+
+export function listResumePage(page = 0, usableOnly = false) {
+  return request(`/api/v1/resumes?page=${page}&size=20&usableOnly=${usableOnly}`)
+}
+
+export function getResumeDetail(id, analysisPage = 0, interviewPage = 0) {
+  return request(`/api/v1/resumes/${encodeURIComponent(id)}/detail?analysisPage=${analysisPage}&interviewPage=${interviewPage}&size=20`)
+}
+
+export async function downloadResumeFile(id, report = false) {
+  let response
+  try { response = await fetch(`/api/v1/resumes/${encodeURIComponent(id)}/${report ? 'export' : 'file'}`, { credentials: 'include' }) }
+  catch { throw new ApiError(0, 'BACKEND_UNAVAILABLE', '无法连接本地服务。') }
+  if (response.status === 401) clearExpiredSession()
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new ApiError(response.status, payload?.error?.code || 'RESUME_DOWNLOAD_FAILED', payload?.error?.message || '简历下载失败。')
+  }
+  return response.blob()
 }
 
 export async function parseTask(id) {
